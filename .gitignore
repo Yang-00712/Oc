@@ -1,0 +1,10 @@
+node_modules/
+test-report/
+model-build/
+__pycache__/
+*.pyc
+.env
+.env.*
+TimeOcrTraining.zip
+training-data/
+*.npz

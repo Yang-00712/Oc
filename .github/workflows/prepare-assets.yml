@@ -1,0 +1,55 @@
+name: Prepare and verify OCR assets
+on:
+  push:
+    branches: [build/ocr]
+    paths: ['.github/workflows/prepare-assets.yml', 'tools/prepare-assets.py', 'tools/browser-check.mjs']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: build/ocr
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: digit-model
+          run-id: 35186450014
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/oc-model
+      - run: python -m pip install --disable-pip-version-check pillow==11.3.0
+      - name: Verify fixed model and generate icons
+        run: python tools/prepare-assets.py "$RUNNER_TEMP/oc-model"
+      - run: node tools/stamp.mjs
+      - run: npm test
+      - name: Install isolated browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/oc-browser" --ignore-scripts --no-audit --no-fund playwright@1.63.0
+          node "$RUNNER_TEMP/oc-browser/node_modules/playwright/cli.js" install --with-deps chromium webkit > "$RUNNER_TEMP/browser-install.log" 2>&1 || { tail -60 "$RUNNER_TEMP/browser-install.log"; exit 1; }
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/oc-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - run: node tools/browser-check.mjs
+      - name: Commit only verified assets and content identifiers
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add models/ assets/icon-512.png assets/icon-192.png assets/apple-touch-icon.png assets/demo-times.png tests/golden.json index.html src/
+          if ! git diff --cached --quiet; then
+            git commit -m 'Add verified digit model, resized icons and content identifiers'
+            git push origin HEAD:build/ocr
+          fi
+      - run: python tools/package.py
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: oc-preparation-report
+          path: test-report/
+          retention-days: 7
