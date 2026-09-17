@@ -11,9 +11,8 @@
 | 驗證 | `tests/core.test.mjs`, `tools/browser-check.mjs` | unit、parity、跨引擎UI與失敗路徑 |
 | 發布 | `README.md`, `.github/workflows/check.yml`, `tools/stamp.mjs` | main/(root)、內容識別碼、PR驗證 |
 | 設計與素材 | `docs/OCR.md`, `docs/CREDITS.md` | 原StrForge經驗、已做／未做、來源 |
-
-驗證依據：由初始化時的實際檔案建立；測試結果以對應commit的GitHub Actions為準。
-
 | 多模型與結果隔離 | `src/engines.js`, `src/multi-state.js`, `src/app.js` | catalog / restoreDraft / runEngine / modelRuns |
-| 整列推論與快取 | `src/line-worker.js`, `src/paddle.js`, `src/engine-assets.js` | BGR / CTC / verifiedAsset / clearModel |
+| 整列推論與快取 | `src/line-worker.js`, `src/paddle.js`, `src/engine-assets.js`, `src/model-cache.js` | BGR / CTC / verifiedAsset / writeModelFile / clearModel |
 | 多模型驗證與來源 | `tests/multi.test.mjs`, `tools/multi-browser-check.mjs`, `tools/prepare-local-models.py` | 完整性 / 獨立校正 / 下載非上傳 |
+
+驗證依據：以對應commit的GitHub Actions為準；模型保存於獨立IndexedDB，交易完成後傳給Worker，跨頁重載須實際驗證。
