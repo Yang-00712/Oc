@@ -1,0 +1,36 @@
+name: Integrate locally tested OCR comparison sources
+on:
+  push:
+    branches: [build/local-ocr-models]
+    paths: ['tools/.integration/**', '.github/workflows/integrate-local-models.yml']
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Verify exact source patch and apply without touching models
+        shell: python
+        run: |
+          from pathlib import Path
+          import base64,lzma,hashlib,subprocess
+          parts=[Path(f'tools/.integration/{i}.b64') for i in range(4)]
+          patch=lzma.decompress(base64.b64decode(''.join(p.read_text().strip() for p in parts),validate=True))
+          assert hashlib.sha256(patch).hexdigest()=='ac0e5acbe22baaa19f5fe02512768ef595964d86b97c64729078d096f080640b'
+          paths=[line.split(b' b/',1)[1].decode() for line in patch.splitlines() if line.startswith(b'diff --git ')]
+          assert len(paths)==21 and all(not p.startswith(('.github/','models/')) and '..' not in p.split('/') for p in paths),paths
+          subprocess.run(['git','apply','--check','-'],input=patch,check=True)
+          subprocess.run(['git','apply','-'],input=patch,check=True)
+          subprocess.run(['git','add','--',*paths],check=True)
+          for path in parts:path.unlink()
+          subprocess.run(['git','add','--','tools/.integration'],check=True)
+      - run: node tools/stamp.mjs --check && npm test
+      - name: Commit exact sources on isolated branch only
+        run: |
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Integrate tested independent local OCR results, model selection and lazy CPU inference'
+          git push origin HEAD:build/local-ocr-models
