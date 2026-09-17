@@ -27,3 +27,15 @@ GitHub Pages main/(root)：
 https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site
 
 參考原StrForge已核對的資料隔離、匯出不自動清除、真實測試與實機區分要求，沒有複製C#、WASM、字型或原始使用者資料。
+
+## 新增本機整列模型
+
+PaddleOCR權重著作權屬Baidu/PaddlePaddle及原權利人，Apache-2.0；RapidAI提供ONNX轉換並沿用原授權。固定v3.9.2來源及SHA256在tools/prepare-local-models.py，取得後大小與雜湊在models/local-engines.json，字典由同一模型metadata取得。包含models/PaddleOCR-LICENSE。
+https://github.com/RapidAI/RapidOCR/blob/main/python/rapidocr/default_models.yaml
+https://paddlepaddle.github.io/PaddleOCR/main/en/version3.x/module_usage/text_recognition.html
+
+ONNX Runtime Web 1.22.0，Microsoft Corporation，MIT；npm套件下載以registry發佈的SHA512 integrity核對，隨包附vendor/ort/LICENSE。只包含WASM CPU後端，禁用多執行緒及proxy，不使用外部OCR服務。
+https://github.com/microsoft/onnxruntime/tree/v1.22.0
+https://onnxruntime.ai/docs/tutorials/web/env-flags-and-session-options.html
+
+BGR/CHW正規化與CTC遵守PaddleOCR/RapidOCR公開推論契約。沒有以單一模型換不同名稱，也未訓練使用者照片。各權重獨立；英文與通用版仍屬同一PP-OCR家族。

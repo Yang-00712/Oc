@@ -11,11 +11,11 @@
 <meta property="og:title" content="Oc · 時間掃描">
 <meta property="og:description" content="拍照 → 框選 → 核對時間；在裝置本機處理。">
 <meta property="og:image" content="https://yang-00712.github.io/Oc/assets/icon-512.png">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'none'">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="icon" href="assets/icon-192.png" type="image/png">
-<link rel="stylesheet" href="app.css?build=6ea10ff10bf7">
+<link rel="stylesheet" href="app.css?build=80613cecd6f2">
 <title>Oc · 時間掃描</title>
 </head>
 <body>
@@ -37,22 +37,25 @@
 <details><summary>框選座標（百分比）</summary><div class="four-fields"><label>左<input id="roi-x" type="number" min="0" max="99" value="0"></label><label>上<input id="roi-y" type="number" min="0" max="99" value="0"></label><label>寬<input id="roi-w" type="number" min="1" max="100" value="100"></label><label>高<input id="roi-h" type="number" min="1" max="100" value="100"></label></div></details>
 </div>
 </div>
-<div class="card"><div class="two-fields"><label>列數<input id="row-count" type="number" min="1" max="100" inputmode="numeric" placeholder="留空＝自動"></label><label>數字切割<select id="digit-mode"><option value="auto">自動辨識間距</option><option value="equal">每列等寬切四格</option></select></label></div><p class="small">自動漏列時，填實際列數並框齊最上、最下列邊界。等寬模式適用四個字對齊的紙張。</p><div class="actions"><button id="recognize" class="primary wide" type="button" disabled>辨識時間 →</button><button id="cancel" type="button" hidden>取消</button></div><p id="progress" class="small" aria-live="polite">模型只在按下辨識時載入。</p></div>
+<div class="card"><h3>勾選本機模型</h3><div id="engine-options"></div><p class="small">各模型依序執行，結果分開保存。首次辨識才下載權重與共用引擎；照片只在手機計算，不上傳。</p></div>
+<div class="card"><div class="two-fields"><label>列數<input id="row-count" type="number" min="1" max="100" inputmode="numeric" placeholder="留空＝自動"></label><label>數字切割<select id="digit-mode"><option value="auto">自動辨識間距</option><option value="equal">每列等寬切四格</option></select></label></div><p class="small">列數是核對用，不再等高硬切。整列模型不切四個字；請框近時間欄，陰影或連筆仍可能需要分段辨識。</p><div class="actions"><button id="recognize" class="primary wide" type="button" disabled>辨識時間 →</button><button id="cancel" type="button" hidden>取消</button></div><p id="progress" class="small" aria-live="polite">模型只在按下辨識時載入。</p></div>
 </section>
 <section id="review" class="page" hidden>
-<div class="section-head"><div><span class="eyebrow">看一眼，再帶走</span><h2>校正結果</h2></div><button id="add-row" type="button">＋ 一列</button></div>
+<div class="section-head"><div><span class="eyebrow">看一眼，再帶走</span><h2>各模型結果</h2></div><button id="add-row" type="button">＋ 一列</button></div>
+<div id="model-results" class="model-results" aria-label="切換模型結果"></div><p class="small">「修改」是你改過的列數，不是模型準確率；不同模型的分數不能直接比較。辨識時間包含下載。</p>
 <p class="small">對照每列原圖，輸入 0900 或 09:00，再按「確認」。模型分數不是正確率，合法時間也可能辨識錯。</p>
-<div class="review-tools"><label class="check"><input id="collect" type="checkbox"> 收集我確認的字跡（只存本機）</label><button id="confirm-valid" type="button" class="quiet">我已核對，確認全部有效列</button></div>
+<div class="review-tools"><details><summary>選用：收集教材（匯出時間不需要）</summary><label class="check"><input id="collect" type="checkbox"> 收集我確認的字跡（只存本機）</label></details><button id="confirm-valid" type="button" class="quiet">我已核對，確認全部有效列</button></div>
 <p id="review-count" class="small"></p><div id="rows"></div><p id="save-status" class="small" role="status"></p>
-<div class="card export-card"><h3>匯出時間</h3><div class="actions"><button id="copy" class="primary" type="button">複製</button><button id="txt" type="button">TXT</button><button id="csv" type="button">CSV</button></div><textarea id="output" rows="5" readonly aria-label="匯出內容，剪貼簿失敗時可手動複製" placeholder="確認後會顯示每列 HH:MM"></textarea><p class="small">不會自動修改時間順序、不會猜補、不會匯出未確認列。</p></div>
+<div class="card export-card"><h3>匯出目前模型的校正結果</h3><div class="actions"><button id="copy" class="primary" type="button">複製</button><button id="txt" type="button">TXT</button><button id="csv" type="button">CSV</button></div><textarea id="output" rows="5" readonly aria-label="匯出內容，剪貼簿失敗時可手動複製" placeholder="確認後會顯示每列 HH:MM"></textarea><p class="small">不會自動修改時間順序、不會猜補、不會匯出未確認列。</p></div>
 </section>
 <section id="settings" class="page" hidden>
-<span class="eyebrow">清楚知道資料在哪裡</span><h2>設定與教材</h2>
+<span class="eyebrow">清楚知道資料在哪裡</span><h2>設定</h2>
+<div class="card"><h3>本機模型容量</h3><button id="show-model-storage" type="button">查看模型下載狀態</button><div id="model-storage"></div><p class="small">移除模型只移除 Oc 模型權重快取，不清除草稿、教材或 StrForge。權重已保存不代表整個網站可離線。</p></div>
 <div class="card"><h3>這台裝置的 Oc 資料</h3><p id="storage-status">讀取中…</p><p class="small">這是 Oc 保存內容的估算大小，不是 RAM，也不含其他網站資料。</p><div class="actions"><button id="export-training" type="button" class="primary">匯出教材 ZIP</button><button id="clear-training" type="button">清除教材</button><button id="clear-draft" type="button">清除校正草稿</button></div></div>
-<div class="card"><h3>模型與能力範圍</h3><p>使用小型 0–9 手寫數字 CNN，辨識在瀏覽器的 Worker 執行；不下載 .NET 或大型 OCR runtime。</p><p>適用淺色紙張、深色筆跡、每列四個分開的數字。連筆、重疊、潦草或透視嚴重時，請在校正頁修改。</p><p>目前模型不是用你的字訓練。確認字跡只累積教材，不會自動訓練或改變模型。</p><p class="small">教材包含時間列縮圖與人工答案。再訓練前需校對切字；本版不把整列答案擅自當成每格標籤。教材上限 2,000 列。</p></div>
+<div class="card"><h3>模型與能力範圍</h3><p>提供四個獨立模型：Oc CNN、PP-OCRv5 英文／數字、PP-OCRv5 通用、PP-OCRv4 英文／數字。全部在瀏覽器 Worker 執行；不使用雲端 OCR、不需要訓練或安裝 .NET。</p><p>CNN 適用分開的數字；PP-OCR 直接辨識整列。各自保存初判與校正結果，不自動投票或猜補。連筆、重疊、潦草或透視嚴重時，請在校正頁修改。</p><p>目前模型不是用你的字訓練。確認字跡只累積教材，不會自動訓練或改變模型。</p><p class="small">教材包含時間列縮圖與人工答案。再訓練前需校對切字；本版不把整列答案擅自當成每格標籤。教材上限 2,000 列。</p></div>
 <div class="card"><h3>啟動與資料保護</h3><p>沒有 Service Worker 或離線保證。重新載入不清資料；相片不離開裝置。瀏覽器清除網站資料仍可能移除草稿與教材，請定期匯出。</p><p class="small">Oc 使用獨立的 IndexedDB，不讀取或清除 StrForge 的保存資料。</p></div>
 </section>
 </main><footer>Oc · 辨識協助，人工確認。</footer>
 <noscript>需要啟用 JavaScript 才能在本機辨識照片。</noscript>
-<script type="module" src="src/app.js?build=6ea10ff10bf7"></script>
+<script type="module" src="src/app.js?build=80613cecd6f2"></script>
 </body></html>
