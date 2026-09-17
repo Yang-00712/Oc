@@ -1,0 +1,3 @@
+# CPU PyTorch is installed separately from the official CPU-only index by setup.py.
+numpy==2.3.5
+Pillow==12.3.0

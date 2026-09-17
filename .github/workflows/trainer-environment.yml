@@ -1,0 +1,43 @@
+name: Oc local trainer environment (no deployment)
+on:
+  push:
+    branches: [test/trainer-environment]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: 'x64'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Run the packaged Windows installer without PowerShell policy changes
+        shell: cmd
+        run: Setup.cmd --yes --skip-reference
+      - name: Rerun installer diagnostics without reinstalling
+        shell: cmd
+        run: Setup.cmd --check
+      - name: Download pinned public reference for local offline tests
+        shell: python
+        run: |
+          import urllib.request, pathlib, hashlib, json, subprocess
+          out=pathlib.Path('trainer-report');out.mkdir(exist_ok=True)
+          with urllib.request.urlopen('https://storage.googleapis.com/tensorflow/tf-keras-datasets/mnist.npz',timeout=90) as r:
+              raw=r.read(16000001)
+          assert hashlib.sha256(raw).hexdigest()=='731c5ac602752760c8e48fbffcf8c3b850d9dc2a2aedcf2cc48468fc17b673d1'
+          (out/'mnist.npz').write_bytes(raw)
+          p=subprocess.run(['.venv/Scripts/python.exe','-m','trainer.doctor'],capture_output=True,text=True,check=True)
+          (out/'environment.txt').write_text(p.stdout,encoding='utf-8')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trainer-environment-reference
+          path: trainer-report/
+          retention-days: 7
