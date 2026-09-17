@@ -41,7 +41,7 @@ for(const[name,engine,options]of[['chromium',chromium,{viewport:{width:390,heigh
   assert.deepEqual(bad,[]);assert.equal(requests.some(r=>r.method!=='GET'||r.post),false,'No image upload or external inference');assert.deepEqual(errors,[]);
   reports.push({browser:name,engines:raw,independentEdits:true,draftReload:true,activeExport:true,noUpload:true,errors});
   // Window-owned model cache must be visible after reopen and avoid weight re-download.
-  await page.locator('#model-storage .model-storage-line').last().locator('button').click();
+  await page.locator('#model-storage .model-storage-line').last().locator('[data-model-action=clear]').click();
   await page.waitForFunction(()=>document.querySelector('#model-storage').textContent.includes('尚未完整下載'));
   assert.equal((await page.locator('#model-storage').innerText()).match(/已下載保存/g)?.length,2);
   await page.locator('[data-tab=review]').click();assert.equal((await readRows(page))[0],'0910');
@@ -56,10 +56,12 @@ for(const[name,engine,options]of[['chromium',chromium,{viewport:{width:390,heigh
   // Simulate a blocked selected model after CNN completion: cancelling must retain CNN.
   await page.locator('[data-tab=scan]').click();await page.locator('#demo').click();
   for(const id of ['ppocr-v5-ch','ppocr-v4-en'])await page.locator(`input[name=engine][value="${id}"]`).uncheck();
-  // Block the manifest (it is intentionally revalidated); no short fetch retries.
+  // The manifest is now locally pinned. Remove just this selected model and
+  // block its real weight download; cancellation still must retain finished CNN.
+  await page.evaluate(async()=>{const {clearModel}=await import('./src/engine-assets.js');await clearModel('ppocr-v5-en');});
   let hold,arrive;const reached=new Promise(r=>arrive=r);
-  await context.route('**/models/local-engines.json',r=>{hold=r;arrive();});
-  await page.locator('#recognize').click();await reached;await page.locator('#cancel').click();await hold.abort().catch(()=>{});await context.unroute('**/models/local-engines.json');
+  await context.route('**/models/ppocr-v5-en/model.onnx*',r=>{hold=r;arrive();});
+  await page.locator('#recognize').click();await reached;await page.locator('#cancel').click();await hold.abort().catch(()=>{});await context.unroute('**/models/ppocr-v5-en/model.onnx*');
   await page.waitForFunction(()=>!document.querySelector('#review').hidden);assert.deepEqual(await readRows(page),['0900','0910','1002','1004']);
   reports.at(-1).cancelPreservesCompleted=true;
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);

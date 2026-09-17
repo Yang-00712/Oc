@@ -10,7 +10,7 @@
 
 選圖 → 裝置解碼與縮小（長邊最多1600px） → 拖曳ROI或輸入比例 → 裁切 → 勾選模型 → 依序核對／載入權重 → Module Worker → 局部對比與逐列切割 → CNN單字或PP-OCR整列推論 → 各自時間結果 → 校正頁 → 人工確認 → 草稿/可選教材 → 目前模型TXT/CSV/剪貼簿。
 
-成功才取代草稿。取消、下載/hash失敗、單一模型4分鐘未完成均終止Worker，不無限重抓，可手動重試。時間先後只警告，不推測字跡或改資料。
+成功才取代草稿。下載／匯入準備最多15分鐘；全部模型與共用引擎資源準備完成後，才開始四分鐘初始化／辨識計時。取消、下載/hash失敗會停止目前操作、保留已完成結果與檔案，不無限重抓，可手動重試。時間先後只警告，不推測字跡或改資料。
 
 ## 記憶體與保存
 
@@ -40,6 +40,14 @@ CNN僅0–9：55,000訓練、5,000驗證、10,000未用於選模的測試圖，s
 
 `draft.schema=1`保留原rows，新增可選resultsSchema/modelResults/activeEngine；舊rows可還原。未知schema或不合法新資料只報錯不覆蓋。模型失敗不將錯誤結果當成空白成功，已完成模型保存。每個模型的raw與value分離，不用合法時間規則補數字。
 
-`src/engine-assets.js`與`src/model-cache.js`只處理獨立IndexedDB `oc-local-model-files-v1`的公開模型檔案，URL含權重hash。寫入交易完成後才將ArrayBuffer轉移給Worker，避免Worker終止或頁面重載遺失模型。手機下載來自本站，首次下載需網路；無Service Worker，不能宣稱整站離線。移除下載只移除指定模型路徑，不清Oc草稿／教材IndexedDB或StrForge。
+`src/engine-assets.js`與`src/model-cache.js`只處理獨立IndexedDB `oc-local-model-files-v1`的公開模型、字典與共用引擎，URL含檔案hash。寫入交易完成並讀回驗證後才將ArrayBuffer轉移給Worker；Worker以經固定hash驗證的Blob URL載入共用引擎，不需再次HTTP下載大檔。手機下載來自本站，首次下載需網路；無Service Worker，不能宣稱整站離線。移除下載只移除指定模型路徑，不清Oc草稿／教材IndexedDB或StrForge。
 
 本次亦改局部對比切列與墨跡範圍切字，指定列數不再強制等分。單一張照片即使得到26列仍不代表26筆正確，需實拍核對。
+
+## 模型 ZIP 安裝
+
+設定頁固定連結下載本站 `downloads/Oc-Models.zip` 或 `downloads/Oc-PP-OCRv5-General.zip`，由瀏覽器保存到裝置檔案。使用者回到原 Oc 入口用 file input 選取 ZIP；下載不代表已匯入。
+
+`src/model-pack.js` 僅接受大小及檔數受限的 ZIP_STORED 包。全包依本站 `src/model-catalog.js` 固定清單驗證，不能信任包內自帶hash或執行任意腳本；每個檔案完整驗證後才寫入，損毀包不覆蓋正常模型。模型與共用引擎均完整保存才標可辨識。
+
+`tools/model-install-check.mjs` 從設定頁點真實下載連結，核對下載內容、匯入下載檔、重載，再封鎖全部模型與共用引擎HTTP請求進行三模型實際推論。另驗證損毀包拒絕、取消、四分鐘邊界與資料保留；不代表實體iPhone驗收或整站離線。

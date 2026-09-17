@@ -30,6 +30,11 @@ jobs:
       - run: node tools/cache-probe.mjs
       - run: node tools/browser-check.mjs
       - run: node tools/multi-browser-check.mjs
+      - run: python tools/model-packs.py
+      - run: node tools/model-install-check.mjs
+      - name: Verify public Pages download links after deployment
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: node tools/published-model-check.mjs
       - name: Archive exact source snapshot (not a pass signal)
         if: ${{ !cancelled() }}
         run: python tools/package.py

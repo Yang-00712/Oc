@@ -16,6 +16,19 @@
 
 PP-OCR模型由GitHub runner取得已訓練且固定雜湊的權重，隨本站發布。手機只從本站下載，照片及像素不傳到GitHub或任何OCR服務。英文v5約7.5MiB、通用v5約16.0MiB、英文v4約7.3MiB，共用ONNX Runtime Web約10.8MiB；實際bytes見models/local-engines.json。權重磁碟大小不代表推論RAM。模型按需載入，首頁不載入；設定頁可查看或只移除指定模型快取。
 
+## 先存手機，再匯入
+
+設定頁的「模型安裝與容量」提供兩步：
+
+1. 按「下載全部模型 ZIP」，或只下載通用模型，存入 iPhone「檔案」。完整包已包含通用模型；先前下載的同名原始包也可直接用，不需再下載、不解壓。
+2. 回到平常使用的 Oc 主畫面入口，設定 →「從檔案匯入模型 ZIP」→ 選檔 → 等到匯入完成，且模型顯示「可辨識」。再回掃描頁勾選模型辨識。
+
+本站固定下載檔位於 `downloads/Oc-Models.zip` 與 `downloads/Oc-PP-OCRv5-General.zip`。下載只是保存 ZIP，不會自動安裝。不是匯出教材，也不是 Oc 原始碼 ZIP。瀏覽器下載介面可能不同；必要時以 Safari 開啟下載連結，保存後仍回原 Oc 入口匯入。
+
+匯入會先檢查全部檔案的 SHA-256，再寫入獨立模型保存區，包含共用 WASM 引擎。使用 `ZIP_STORED` 逐檔讀取，無需大型解壓依賴；任意重新壓縮／不符合清單的包會拒絕。失敗、取消保留已完整保存檔案與草稿，不自動清資料。
+
+也可用掃描頁「先下載並保存勾選模型」或設定頁各模型的「下載並保存」。下載顯示檔名、位元組進度；下載準備與四分鐘辨識計時分開。匯入後模型與共用引擎都從本機讀取，網站入口與普通 JS 仍需正常載入；不宣稱整站可離線。
+
 ## 資料與模型
 
 照片在裝置內處理，不上傳。原始全照不保存；草稿包含結果與每列小縮圖，存於獨立 IndexedDB `oc-time-v1`。不讀取、刪除或修改 StrForge 資料。瀏覽器清除網站資料仍可能移除 Oc 資料，請定期匯出。
@@ -24,7 +37,7 @@ PP-OCR模型由GitHub runner取得已訓練且固定雜湊的權重，隨本站�
 
 原有 CNN 模型在 GitHub Actions 用 MNIST 公開資料訓練，權重在 `models/time-digit.json`。手機只在點辨識時透過 Worker 載入；此 CNN 的推論採與 PyTorch 對齊的小型 JavaScript 實作，不需 ONNX runtime；只有選 PP-OCR 時才載入共用 ONNX Runtime Web。模型不是用你的字跡訓練；MNIST 單字測試不代表實拍時間正確率。完整度量在 `models/training-metrics.json`。
 
-本版沒有 Service Worker 或整站離線保證。模型權重由 Window 保存於獨立 IndexedDB `oc-local-model-files-v1`，交易完成後才以 transferable ArrayBuffer 交給 Worker；不依賴 WebKit 的 CacheStorage 跨頁保留。清理模型不清草稿。每次只執行一個 Worker；模型錯誤、取消或單一模型超過4分鐘時停止該 Worker，保留已完成的其他模型。不攔截全域 fetch、不自動反覆重抓。
+本版沒有 Service Worker 或整站離線保證。模型權重、字典與共用執行引擎由 Window 保存於獨立 IndexedDB `oc-local-model-files-v1`，交易完成並讀回驗證後才以 transferable ArrayBuffer 交給 Worker；不依賴 WebKit 的 CacheStorage 跨頁保留。共用引擎僅以本站固定雜湊驗證的 Blob URL 執行，不執行任意 ZIP 腳本。清理模型不清草稿。每次只執行一個 Worker；下載準備最多15分鐘，模型準備好後才開始四分鐘初始化／辨識計時；取消或錯誤保留已完成的其他模型。不攔截全域 fetch、不自動反覆重抓。
 
 ## 開發與檢查
 
@@ -34,7 +47,7 @@ node tools/stamp.mjs --check
 node tools/serve.mjs
 ```
 
-本地網址 `http://127.0.0.1:4173/Oc/`。多模型的真實瀏覽器流程另外執行 `node tools/multi-browser-check.mjs`。修改 `src/*.js` 或 CSS 後執行 `node tools/stamp.mjs` 再提交；內容識別碼不是產品版本號。
+本地網址 `http://127.0.0.1:4173/Oc/`。多模型的真實瀏覽器流程另外執行 `node tools/multi-browser-check.mjs`。模型安裝驗收依序執行 `python tools/model-packs.py` 與 `node tools/model-install-check.mjs`，測試設定頁實際下載、匯入、重載、模型與引擎 HTTP 封鎖後三模型推論、損毀包拒絕與資料保留。修改 `src/*.js` 或 CSS 後執行 `node tools/stamp.mjs` 再提交；內容識別碼不是產品版本號。
 
 瀏覽器檢查需指定隔離安裝的 Playwright ES module：
 
