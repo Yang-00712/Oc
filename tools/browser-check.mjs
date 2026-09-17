@@ -50,21 +50,25 @@ for(const [name,engine,options] of [['chromium',chromium,{viewport:{width:390,he
   await page.locator('#recognize').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('完整性'));
   await page.locator('[data-tab=review]').click();assert.equal(await page.locator('.row-edit input').first().inputValue(),'0968');
   await context.unroute('**/models/time-digit.json*');
-  // A local file input and pointer-selected top half must recognize only the first two rows.
   await page.locator('[data-tab=scan]').click();
   await page.locator('#photo').setInputFiles('assets/demo-times.png');
   await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('已載入照片'));
   await page.locator('#photo-canvas').scrollIntoViewIfNeeded();
   const rect=await page.locator('#photo-canvas').boundingBox();
-  await page.mouse.move(rect.x+1,rect.y+1);await page.mouse.down();
-  await page.mouse.move(rect.x+rect.width-1,rect.y+rect.height*.5,{steps:12});await page.mouse.up();
+  // Stay inside the rounded canvas corner; (x+1,y+1) hits its parent, not the canvas.
+  const hit=await page.evaluate(({x,y})=>document.elementFromPoint(x+12,y+12)?.id,rect);
+  assert.equal(hit,'photo-canvas','Pointer must start on the actual canvas');
+  await page.mouse.move(rect.x+12,rect.y+12);await page.mouse.down();
+  await page.mouse.move(rect.x+rect.width-12,rect.y+rect.height*.5,{steps:12});await page.mouse.up();
+  const cropHeight=Number(await page.locator('#roi-h').inputValue());
+  assert.ok(cropHeight>40&&cropHeight<55,'Pointer selection must actually reduce ROI height');
   await page.locator('#save-template').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('已記住'));
   await page.locator('#full-frame').click();await page.locator('#use-template').click();
   await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('已套用'));
+  assert.equal(Number(await page.locator('#roi-h').inputValue()),cropHeight);
   await page.screenshot({path:`test-report/${name}-crop.png`,fullPage:true});
   await page.locator('#recognize').click();await page.waitForSelector('#review:not([hidden])');
   assert.deepEqual(await page.locator('.row-edit input').evaluateAll(items=>items.map(item=>item.value)),['0900','0910']);
-  // Deliberately hold a model response, cancel, then release it; late results cannot replace rows.
   await page.locator('[data-tab=scan]').click();
   let held,received;const intercepted=new Promise(resolve=>received=resolve);
   await context.route('**/models/time-digit.json*',route=>{held=route;received();});
@@ -72,7 +76,6 @@ for(const [name,engine,options] of [['chromium',chromium,{viewport:{width:390,he
   await held.abort().catch(()=>{});await context.unroute('**/models/time-digit.json*');
   await page.locator('[data-tab=review]').click();
   assert.deepEqual(await page.locator('.row-edit input').evaluateAll(items=>items.map(item=>item.value)),['0900','0910']);
-  // blob:/data: image previews and ZIP downloads are local objects, not network uploads.
   const forbidden=requests.filter(address=>!localRequest(address));
   await writeFile(`test-report/${name}-request-origins.json`,JSON.stringify({protocols:[...new Set(requests.map(u=>new URL(u).protocol))],forbidden},null,2));
   assert.deepEqual(forbidden,[],'No photo/API requests leave the site');
