@@ -1,8 +1,8 @@
-import { parseTime, exportTimes, orderWarnings } from './time.js?build=26a84d591301';
-import { decodePhoto, rotatedPhoto, cropPhoto, thumbnail } from './photo.js?build=26a84d591301';
-import { ENGINES, engineById, selectedEngines, comparisonStats } from './engines.js?build=26a84d591301';
-import { restoreDraft, snapshotDraft } from './multi-state.js?build=26a84d591301';
-import * as store from './store.js?build=26a84d591301';
+import { parseTime, exportTimes, orderWarnings } from './time.js?build=6ac4ff17052f';
+import { decodePhoto, rotatedPhoto, cropPhoto, thumbnail } from './photo.js?build=6ac4ff17052f';
+import { ENGINES, engineById, selectedEngines, comparisonStats } from './engines.js?build=6ac4ff17052f';
+import { restoreDraft, snapshotDraft } from './multi-state.js?build=6ac4ff17052f';
+import * as store from './store.js?build=6ac4ff17052f';
 
 const $=id=>document.getElementById(id);
 let installing=false,installJob=0,installController=null;
@@ -40,7 +40,8 @@ function refreshRow(row,element,index){
     element.classList.toggle('warn',!row.confirmed);
     const info=element.querySelector('.row-message');
     const messages=[time.valid?time.formatted:time.error];
-    if(row.raw)messages.push(`初判 ${row.raw}`);
+    if(row.raw)messages.push(`${row.numericOnly?'數字初判':'初判'} ${row.raw}`);
+    if(row.numericOnly&&typeof row.transcript==='string'&&row.transcript!==row.raw)messages.push(`限定前原始辨識：${row.transcript||'（空白）'}`);
     if(prob!==null)messages.push(`最低模型分數 ${Math.round(prob*100)}%（非正確率）`);
     if(row.reason)messages.push(row.reason);
     if(warning)messages.push('早於上一列，請核對；不自動更改');
@@ -156,14 +157,14 @@ function runEngine(engine,pixels,crop,options){
             let assets;
             if(engine.kind==='line'){
                 assetController=new AbortController();const signal=assetController.signal;
-                const {loadEngineAssets}=await import('./engine-assets.js?build=26a84d591301');
+                const {loadEngineAssets}=await import('./engine-assets.js?build=6ac4ff17052f');
                 if(id!==job||settled)return;
-                const {withAssetBudget}=await import('./asset-download.js?build=26a84d591301');
+                const {withAssetBudget}=await import('./asset-download.js?build=6ac4ff17052f');
                 assets=await withAssetBudget(()=>loadEngineAssets(engine.id,progress,signal),assetController);
                 if(id!==job||settled)return;
             }
             timer=setTimeout(()=>finish(null,'模型已準備，但初始化／辨識超過 4 分鐘，已停止；已安裝檔案與其他結果保留。'),240000);
-            worker=new Worker(new URL(engine.id==='cnn'?'./ocr-worker.js?build=26a84d591301':'./line-worker.js?build=26a84d591301',import.meta.url),{type:'module'});
+            worker=new Worker(new URL(engine.id==='cnn'?'./ocr-worker.js?build=6ac4ff17052f':'./line-worker.js?build=6ac4ff17052f',import.meta.url),{type:'module'});
             worker.onerror=event=>finish(null,'辨識模組錯誤：'+event.message);
             worker.onmessage=({data})=>{
                 if(data.id!==job||settled)return;
@@ -193,7 +194,7 @@ $('recognize').onclick=protect(async()=>{
             const started=performance.now();
             try{
                 const data=await runEngine(engine,pixels,crop,options);
-                const next=data.rows.map(item=>({...newRow(item.raw),thumbnail:thumbnail(crop,item.box),transcript:item.transcript??item.raw,predictions:item.predictions,uncertain:item.uncertain,reason:item.reason,modelHash:item.modelHash}));
+                const next=data.rows.map(item=>({...newRow(item.raw),thumbnail:thumbnail(crop,item.box),transcript:item.transcript??item.raw,numericOnly:item.numericOnly===true,predictions:item.predictions,uncertain:item.uncertain,reason:item.reason,modelHash:item.modelHash}));
                 completed.push({engine:engine.id,rows:next,status:'ready',elapsedMs:performance.now()-started,error:''});
                 if(!hasSuccess){hasSuccess=true;activeEngine=engine.id;rows=next;}
             }catch(error){completed.push({engine:engine.id,rows:[],status:queueCancelled?'cancelled':'error',elapsedMs:performance.now()-started,error:String(error.message||error)});}
@@ -216,7 +217,7 @@ function installControls(busy){
     $('cancel-install').hidden=!busy;$('recognize').disabled=busy||batchRunning||!photo;
 }
 async function showModelStorage(){
-    const {modelStorage,clearModel}=await import('./engine-assets.js?build=26a84d591301'),info=await modelStorage(),host=$('model-storage');host.replaceChildren();
+    const {modelStorage,clearModel}=await import('./engine-assets.js?build=6ac4ff17052f'),info=await modelStorage(),host=$('model-storage');host.replaceChildren();
     host.append(node('p',`共用引擎 ${(info.runtimeBytes/1048576).toFixed(1)} MiB · ${info.runtimeInstalled?'已完整保存':'尚未完整保存'}（${(info.runtimeSaved/1048576).toFixed(1)} MiB；非 RAM）。`));
     for(const item of info.items){
         const line=node('div',undefined,'model-storage-line');
@@ -237,7 +238,7 @@ async function runInstallation(action){
     const report=(message,error=false)=>{if(id===installJob)installationProgress(message,error);};
     report('準備模型檔案；下載不占用四分鐘辨識時間，照片不會上傳。');
     try{
-        const {withAssetBudget}=await import('./asset-download.js?build=26a84d591301');
+        const {withAssetBudget}=await import('./asset-download.js?build=6ac4ff17052f');
         await withAssetBudget(signal=>action(report,signal),controller);
         if(id===installJob)notice('模型準備完成，可回掃描頁勾選並辨識。');
     }catch(error){if(id===installJob){report(error.message||String(error),true);notice(error.message||String(error),true);}}
@@ -249,7 +250,7 @@ async function prepareModels(ids){
     const names=ids.filter(id=>engineById(id)?.kind==='line');
     if(!names.length){installationProgress('小型 CNN 不需要大型安裝包；直接選照片辨識即可。');return;}
     await runInstallation(async(report,signal)=>{
-        const {prepareEngine}=await import('./engine-assets.js?build=26a84d591301');
+        const {prepareEngine}=await import('./engine-assets.js?build=6ac4ff17052f');
         for(const id of names)await prepareEngine(id,message=>report(`${engineById(id).name}：${message}`),signal);
         report(`已完整保存 ${names.length} 個模型與共用引擎；可開始辨識。`);
     });
@@ -260,7 +261,7 @@ $('install-selected').onclick=()=>void prepareModels([...document.querySelectorA
 $('cancel-install').onclick=()=>installController?.abort(new Error('已取消模型準備；完整存好的檔案與原草稿保留。'));
 $('model-package').onchange=protect(async event=>{
     const file=event.target.files?.[0];event.target.value='';if(!file)return;
-    await runInstallation(async(report,signal)=>{const {importModelPack}=await import('./model-pack.js?build=26a84d591301');await importModelPack(file,report,signal);});
+    await runInstallation(async(report,signal)=>{const {importModelPack}=await import('./model-pack.js?build=6ac4ff17052f');await importModelPack(file,report,signal);});
 });
 $('add-row').onclick=()=>{if(rows.length>=100){notice('每批最多 100 列。',true);return;}rows.push(newRow());renderRows();save();$('rows').lastElementChild.querySelector('input').focus();};
 $('confirm-valid').onclick=protect(async()=>{if(!rows.length)throw new Error('目前沒有結果。');if(!confirm('確認已對照原圖核對所有有效時間？此動作不是自動辨識驗證。'))return;for(const row of rows)if(parseTime(row.value).valid)await confirmRow(row);renderRows();save();});
@@ -270,7 +271,7 @@ $('copy').onclick=protect(async()=>{const text=exportTimes(rows);$('output').val
 async function refreshMetrics(){try{const data=await store.metrics();$('storage-status').textContent=`草稿 ${data.rows} 列 · 教材 ${data.samples} / 2,000 列 · 約 ${(data.bytes/1024).toFixed(1)} KB`; }catch(error){$('storage-status').textContent='讀取失敗：'+error.message;}}
 $('export-training').onclick=protect(async()=>{
     const samples=await store.allSamples();if(!samples.length)throw new Error('尚未收集教材。先勾選收集字跡，再確認有原圖的時間列。');
-    const {zipFiles}=await import('./zip.js?build=26a84d591301');
+    const {zipFiles}=await import('./zip.js?build=6ac4ff17052f');
     const labels=[],files=[];
     samples.forEach((sample,index)=>{
         const name=`images/${String(index+1).padStart(6,'0')}.png`;

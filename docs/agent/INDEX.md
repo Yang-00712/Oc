@@ -12,7 +12,7 @@
 | 發布 | `README.md`, `.github/workflows/check.yml`, `tools/stamp.mjs` | main/(root)、內容識別碼、PR驗證 |
 | 設計與素材 | `docs/OCR.md`, `docs/CREDITS.md` | 原StrForge經驗、已做／未做、來源 |
 | 多模型與結果隔離 | `src/engines.js`, `src/multi-state.js`, `src/app.js` | catalog / restoreDraft / runEngine / modelRuns |
-| 整列推論與快取 | `src/line-worker.js`, `src/paddle.js`, `src/engine-assets.js`, `src/model-cache.js` | BGR / CTC / verifiedAsset / writeModelFile / clearModel |
+| 整列推論與快取 | `src/line-worker.js`, `src/paddle.js`, `src/engine-assets.js`, `src/model-cache.js` | BGR / CTC / digitsOnly / verifiedAsset / writeModelFile / clearModel |
 | 多模型驗證與來源 | `tests/multi.test.mjs`, `tools/multi-browser-check.mjs`, `tools/prepare-local-models.py` | 完整性 / 獨立校正 / 下載非上傳 |
 | 模型下載與匯入 | `src/model-pack.js`, `src/asset-download.js`, `src/engine-assets.js`, `index.html` | importModelPack / downloadAsset / prepareEngine；先準備再辨識 |
 | 模型包產生與驗收 | `tools/model-packs.py`, `tools/model-install-check.mjs`, `downloads/` | 固定下載點、ZIP_STORED、hash、封鎖資源網路後推論 |
