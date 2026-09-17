@@ -21,7 +21,11 @@ function database(){
  }).catch(error=>{opening=null;throw error;});
  return opening;
 }
-function validKey(key){if(typeof key!=='string'||key.length>2048||!key.startsWith(new URL('../models/',import.meta.url).href))throw new Error('模型保存路徑無效。');}
+function validKey(key){
+ const modelRoot=new URL('../models/',import.meta.url).href,runtimeRoot=new URL('../vendor/ort/',import.meta.url).href;
+ if(typeof key!=='string'||key.length>2048||(!key.startsWith(modelRoot)&&!key.startsWith(runtimeRoot)))throw new Error('模型保存路徑無效。');
+ const url=new URL(key);if(url.origin!==new URL(import.meta.url).origin||url.username||url.password)throw new Error('模型保存來源無效。');
+}
 async function execute(mode,action){
  const db=await database();
  return new Promise((resolve,reject)=>{

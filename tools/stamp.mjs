@@ -1,6 +1,11 @@
 // Content identifiers only; no product-version bump and no random cache-busting.
 import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+const catalog=JSON.parse(await readFile('models/local-engines.json','utf8'));
+const catalogSource='// Generated from models/local-engines.json by tools/stamp.mjs. Do not edit.\nexport const LOCAL_ASSETS='+JSON.stringify(catalog)+';\n';
+let catalogChanged=false;
+try{catalogChanged=(await readFile('src/model-catalog.js','utf8'))!==catalogSource;}catch(error){if(error.code!=='ENOENT')throw error;catalogChanged=true;}
+if(catalogChanged){if(process.argv.includes('--check'))throw new Error('Run node tools/stamp.mjs: catalog differs.');await writeFile('src/model-catalog.js',catalogSource);}
 const files=(await readdir('src')).filter(name=>name.endsWith('.js')).sort();
 const strip=text=>text.replace(/\?build=[a-f0-9]{12}/g,'');
 const contents=await Promise.all(files.map(async name=>[name,strip(await readFile('src/'+name,'utf8'))]));
