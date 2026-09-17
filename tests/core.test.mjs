@@ -15,7 +15,7 @@ test('leading zero and ordering preserved',()=>assert.equal(exportTimes([{value:
 test('backwards time is a warning, not automatic repair',()=>assert.deepEqual(orderWarnings([{value:'1004'},{value:'0900'},{value:'0910'}]),[false,true,false]));
 test('empty column does not invent digits',()=>assert.throws(()=>segment(new Uint8Array(40*100*4).fill(255),40,100),/未找到/));
 test('row count bound',()=>assert.throws(()=>segment(new Uint8Array(40*100*4).fill(255),40,100,{rowCount:101}),/列數/));
-test('fixed row mode preserves blank rows for manual correction',()=>{const rows=segment(new Uint8Array(40*100*4).fill(255),40,100,{rowCount:4});assert.equal(rows.length,4);assert.ok(rows.every(r=>r.glyphs.length===0&&r.uncertain));});
+test('requested row count cannot invent equally sliced blank rows',()=>assert.throws(()=>segment(new Uint8Array(40*100*4).fill(255),40,100,{rowCount:4}),/與指定 4 列不同/));
 test('blank digit has a zero tensor',()=>assert.ok(normalizeDigit(new Uint8Array(100),10,null).every(n=>n===0)));
 test('malformed model is rejected',()=>assert.throws(()=>loadModel({schema:9}),/模型/));
 test('bad weights rejected',()=>assert.throws(()=>loadModel({schema:1,architecture:'conv8x5-pool2-conv16x5-pool2-fc10',weights:{}}),/參數/));

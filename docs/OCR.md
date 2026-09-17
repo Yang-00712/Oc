@@ -33,3 +33,13 @@ CNN僅0–9：55,000訓練、5,000驗證、10,000未用於選模的測試圖，s
 未做：自動找紙角、透視拉正、連筆序列模型、雲端OCR、個人微調、離線Service Worker、Safari原生相機與主畫面實機驗收。capture只是瀏覽器提示。
 
 測試使用真實圖片及Worker，不直接塞答案。MNIST拼接示例明確標示，不作使用者字跡測量。
+
+## 多模型比較變更
+
+照片像素在記憶體→逐個Worker執行→各自結果與初判→選模型校正→獨立TXT/CSV。三個預訓練PP-OCR權重以整列辨識，原CNN保留為單字對照。全部在裝置上推論；同一時間最多一個模型，完成即終止Worker。沒有雲端API、使用者教材上傳、全域fetch攔截、短逾時重抓。
+
+`draft.schema=1`保留原rows，新增可選resultsSchema/modelResults/activeEngine；舊rows可還原。未知schema或不合法新資料只報錯不覆蓋。模型失敗不將錯誤結果當成空白成功，已完成模型保存。每個模型的raw與value分離，不用合法時間規則補數字。
+
+`src/engine-assets.js`只處理`oc-local-model-files-v1`快取，URL含權重hash。手機下載來自本站，首次下載需網路；無Service Worker，不能宣稱整站離線。移除下載只移除指定模型路徑，不清Oc IndexedDB或StrForge。
+
+本次亦改局部對比切列與墨跡範圍切字，指定列數不再強制等分。單一張照片即使得到26列仍不代表26筆正確，需實拍核對。

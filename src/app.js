@@ -1,13 +1,17 @@
-import { parseTime, exportTimes, orderWarnings } from './time.js?build=6ea10ff10bf7';
-import { decodePhoto, rotatedPhoto, cropPhoto, thumbnail } from './photo.js?build=6ea10ff10bf7';
-import * as store from './store.js?build=6ea10ff10bf7';
+import { parseTime, exportTimes, orderWarnings } from './time.js?build=4d81c25651ac';
+import { decodePhoto, rotatedPhoto, cropPhoto, thumbnail } from './photo.js?build=4d81c25651ac';
+import { ENGINES, engineById, selectedEngines, comparisonStats } from './engines.js?build=4d81c25651ac';
+import { restoreDraft, snapshotDraft } from './multi-state.js?build=4d81c25651ac';
+import * as store from './store.js?build=4d81c25651ac';
 
 const $=id=>document.getElementById(id);
 let rows=[], source=null, photo=null, roi={x:0,y:0,w:1,h:1},worker=null,job=0,timer=null,saving=Promise.resolve(),storageSafe=true;
+let modelRuns=[],activeEngine=null,batchRunning=false,queueCancelled=false,rejectCurrent=null;
 const node=(tag,text,css)=>{const item=document.createElement(tag);if(text!==undefined)item.textContent=text;if(css)item.className=css;return item;};
 function notice(message,error=false){$('notice').textContent=message;$('notice').classList.toggle('error',error);}
 function protect(action){return async event=>{try{await action(event);}catch(error){notice(error.message||String(error),true);}};}
 function tab(name){
+    if(batchRunning&&name!=='scan'){notice('辨識仍在依序執行；可按取消，已完成結果會保留。',true);return;}
     for(const page of document.querySelectorAll('.page'))page.hidden=page.id!==name;
     for(const button of document.querySelectorAll('[data-tab]')){if(button.dataset.tab===name)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');}
     if(name==='settings') void refreshMetrics();
@@ -17,13 +21,14 @@ for(const button of document.querySelectorAll('[data-tab]'))button.onclick=()=>t
 function newRow(value=''){return {id:crypto.randomUUID(),value,raw:value,confirmed:false,thumbnail:'',predictions:[],uncertain:false,reason:'人工輸入',modelHash:null};}
 function save(){
     if(!storageSafe){$('save-status').textContent='儲存不可用；目前只保留在這次畫面。請匯出後再關閉。';return;}
-    const snapshot={schema:1,rows:structuredClone(rows)};
+    const snapshot=snapshotDraft(rows,modelRuns,activeEngine);
     $('save-status').textContent='正在保存本機草稿…';
     saving=saving.catch(()=>{}).then(()=>store.setState('draft',snapshot)).then(()=>{$('save-status').textContent='已保存本機草稿（不含整張照片）。';}).catch(error=>{
         $('save-status').textContent='保存失敗：'+error.message+'。請勿關閉，先匯出。';notice('本機草稿保存失敗；沒有回報成功。',true);
     });
 }
 function updateCounter(){
+    syncActive();renderModelTabs();
     const valid=rows.filter(r=>r.confirmed&&parseTime(r.value).valid).length;
     $('review-count').textContent=rows.length?`${rows.length} 列 · 已確認 ${valid} 列 · 待核對 ${rows.length-valid} 列`:'還沒有結果，可先拍照，或新增一列手動輸入。';
 }
@@ -73,7 +78,8 @@ function renderRows(){
             await confirmRow(row);input.value=row.value;refreshRow(row,element,index);save();
             const next=element.nextElementSibling?.querySelector('input');if(next)next.focus();
         });edit.append(input,confirmButton);
-        element.append(head,edit,node('p','','row-message'));
+        const details=node('details'),summary=node('summary','原始辨識與候選');details.append(summary,node('p','','row-message'));
+        element.append(head,edit,details);
         if(row.predictions.length===4){
             const choices=node('div',undefined,'predictions');
             row.predictions.forEach((prediction,position)=>{if(prediction.score<.9||prediction.margin<.25){
@@ -82,7 +88,7 @@ function renderRows(){
                     button.onclick=()=>{const raw=row.value.replace(':','');if(!/^\d{4}$/.test(raw)){notice('先填齊四位數字，再替換候選。',true);return;}
                         row.value=raw.slice(0,position)+candidate.digit+raw.slice(position+1);row.confirmed=false;input.value=row.value;invalidateSample(row);refreshRow(row,element,index);save();};choices.append(button);
                 }
-            }});element.append(choices);
+            }});details.append(choices);
         }
         $('rows').append(element);refreshRow(row,element,index);
     });updateCounter();
@@ -117,39 +123,89 @@ $('full-frame').onclick=()=>{if(!worker){roi={x:0,y:0,w:1,h:1};draw();}};
 $('save-template').onclick=protect(async()=>{if(!validRoi(roi))throw new Error('請先框選有效範圍。');await store.setState('template',{schema:1,roi});notice('已記住比例範圍；每張照片仍需核對框位。');});
 $('use-template').onclick=protect(async()=>{if(worker)return;const template=await store.getState('template');if(template?.schema!==1||!validRoi(template.roi))throw new Error('尚未記住有效範圍。');roi=template.roi;draw();notice('已套用比例範圍；拍攝角度或距離不同時請重新調整。');});
 $('demo').onclick=protect(async()=>{const response=await fetch(new URL('../assets/demo-times.png',import.meta.url));if(!response.ok)throw new Error('示例載入失敗。');await setPhoto(new File([await response.blob()],'demo.png',{type:'image/png'}));notice('這是 MNIST 手寫數字組成的示例，不是你的字跡或實拍準確率。');});
-function endWorker(){clearTimeout(timer);worker?.terminate();worker=null;$('recognize').disabled=!photo;$('cancel').hidden=true;}
-$('cancel').onclick=()=>{job++;endWorker();$('progress').textContent='已取消，原有校正結果保留。';};
-$('recognize').onclick=protect(async()=>{
-    if(worker||!photo)return;
-    if(rows.length&&!confirm('重新辨識會在成功後替換目前校正草稿。已確認要繼續？'))return;
-    const crop=cropPhoto(photo,roi),pixels=crop.getContext('2d').getImageData(0,0,crop.width,crop.height),id=++job;
-    worker=new Worker(new URL('./ocr-worker.js?build=6ea10ff10bf7',import.meta.url),{type:'module'});$('recognize').disabled=true;$('cancel').hidden=false;
-    const fail=message=>{if(id!==job)return;endWorker();notice(message,true);$('progress').textContent='辨識未完成；原有結果保留，可重試或到校正頁手動輸入。';crop.width=1;crop.height=1;};
-    timer=setTimeout(()=>fail('辨識等待超過 90 秒，已停止本次 Worker；不會自動反覆重抓。'),90000);
-    worker.onerror=event=>fail('辨識模組錯誤：'+event.message);
-    worker.onmessage=({data})=>{
-        try {
+function syncActive(){const current=modelRuns.find(r=>r.engine===activeEngine);if(current)current.rows=rows;}
+function renderModelTabs(){
+    const host=$('model-results');if(!host)return;host.replaceChildren();
+    for(const run of modelRuns){
+        const stats=comparisonStats(run.rows),name=engineById(run.engine)?.name||'先前草稿';
+        const button=node('button',name,'result-tab');button.type='button';button.dataset.engine=run.engine;
+        if(run.engine===activeEngine)button.setAttribute('aria-pressed','true');else button.setAttribute('aria-pressed','false');
+        button.disabled=run.status!=='ready';
+        button.append(node('small',run.status==='ready'?`${stats.total} 列 · 已確認 ${stats.confirmed} · 修改 ${stats.edited} · ${(run.elapsedMs/1000).toFixed(1)} 秒`:(run.error||run.status)));
+        button.onclick=()=>{syncActive();activeEngine=run.engine;rows=run.rows;renderRows();save();$('output').value='';};host.append(button);
+    }
+}
+for(const engine of ENGINES){
+    const label=node('label',undefined,'engine-option'),input=node('input');input.type='checkbox';input.value=engine.id;input.name='engine';input.checked=engine.id==='cnn';input.onchange=protect(async()=>{await store.setState('engine-selection',{schema:1,ids:[...document.querySelectorAll('input[name=engine]:checked')].map(i=>i.value)});});
+    const text=node('span');text.append(node('strong',engine.name),node('small',engine.description));label.append(input,text);$('engine-options').append(label);
+}
+function endWorker(){clearTimeout(timer);worker?.terminate();worker=null;rejectCurrent=null;}
+function cancelBatch(){queueCancelled=true;job++;const reject=rejectCurrent;endWorker();if(reject)reject(new Error('已取消此模型。'));}
+$('cancel').onclick=()=>{cancelBatch();$('progress').textContent='已取消；已完成的模型與原草稿保留。';};
+function runEngine(engine,pixels,crop,options){
+    const id=++job;
+    return new Promise((resolve,reject)=>{
+        rejectCurrent=reject;
+        const finish=(value,error)=>{if(id!==job)return;endWorker();if(error)reject(new Error(error));else resolve(value);};
+        worker=new Worker(new URL(engine.id==='cnn'?'./ocr-worker.js?build=4d81c25651ac':'./line-worker.js?build=4d81c25651ac',import.meta.url),{type:'module'});
+        // This is a whole-job limit with no automatic fetch retries. Cancellation
+        // destroys the Worker. No unfinished native fetch can keep an engine alive.
+        timer=setTimeout(()=>finish(null,'此模型超過 4 分鐘，已停止；其他結果保留。'),240000);
+        worker.onerror=event=>finish(null,'辨識模組錯誤：'+event.message);
+        worker.onmessage=({data})=>{
             if(data.id!==job)return;
-            if(data.type==='progress'){$('progress').textContent=data.message;return;}
-            if(data.type==='error'){fail(data.message);return;}
-            if(data.type==='result'){
-                const next=data.rows.map(item=>({...newRow(item.raw),thumbnail:thumbnail(crop,item.box),predictions:item.predictions,uncertain:item.uncertain,reason:item.reason,modelHash:item.modelHash}));
-                rows=next;endWorker();crop.width=1;crop.height=1;renderRows();save();tab('review');notice(`已解析 ${rows.length} 列。請逐列核對，再匯出。`);
-                $('progress').textContent=`上次解析 ${rows.length} 列。`;
-            }
-        } catch(error) {fail(error.message||String(error));}
-    };
-    worker.postMessage({id,rgba:pixels.data,width:crop.width,height:crop.height,options:{rowCount:$('row-count').value,digitMode:$('digit-mode').value}},[pixels.data.buffer]);
+            if(data.type==='progress'){$('progress').textContent=engine.name+'：'+data.message;return;}
+            if(data.type==='error'){finish(null,data.message);return;}
+            if(data.type==='result')finish(data);
+        };
+        const copy=pixels.data.slice();
+        worker.postMessage({id,engine:engine.id,rgba:copy,width:crop.width,height:crop.height,options},[copy.buffer]);
+    });
+}
+$('recognize').onclick=protect(async()=>{
+    if(batchRunning||!photo)return;
+    const selected=selectedEngines([...document.querySelectorAll('input[name=engine]:checked')].map(i=>i.value));
+    if(rows.length&&!confirm('新辨識成功後會替換這張照片的模型比較結果。舊結果需要保留時請先匯出。繼續？'))return;
+    const crop=cropPhoto(photo,roi),pixels=crop.getContext('2d').getImageData(0,0,crop.width,crop.height);
+    const options={rowCount:$('row-count').value,digitMode:$('digit-mode').value};
+    const completed=[];let hasSuccess=false;
+    batchRunning=true;queueCancelled=false;$('recognize').disabled=true;$('cancel').hidden=false;
+    for(const input of document.querySelectorAll('input[name=engine]'))input.disabled=true;
+    try{
+        for(const engine of selected){
+            if(queueCancelled)break;
+            const started=performance.now();
+            try{
+                const data=await runEngine(engine,pixels,crop,options);
+                const next=data.rows.map(item=>({...newRow(item.raw),thumbnail:thumbnail(crop,item.box),transcript:item.transcript??item.raw,predictions:item.predictions,uncertain:item.uncertain,reason:item.reason,modelHash:item.modelHash}));
+                completed.push({engine:engine.id,rows:next,status:'ready',elapsedMs:performance.now()-started,error:''});
+                if(!hasSuccess){hasSuccess=true;activeEngine=engine.id;rows=next;}
+            }catch(error){completed.push({engine:engine.id,rows:[],status:queueCancelled?'cancelled':'error',elapsedMs:performance.now()-started,error:String(error.message||error)});}
+            if(hasSuccess){syncActive();modelRuns=completed;renderRows();save();}
+        }
+        if(hasSuccess){batchRunning=false;tab('review');notice(`完成 ${completed.filter(r=>r.status==='ready').length} / ${selected.length} 個模型。點模型名稱，各自核對與匯出；結果互不覆蓋。`);}
+        else notice(completed.map(r=>`${engineById(r.engine)?.name}：${r.error}`).join('；')||'辨識取消；原草稿保留。',true);
+    }finally{
+        endWorker();batchRunning=false;crop.width=1;crop.height=1;$('recognize').disabled=!photo;$('cancel').hidden=true;
+        for(const input of document.querySelectorAll('input[name=engine]'))input.disabled=false;
+        $('progress').textContent=queueCancelled?'已取消；已完成結果保留。':`完成 ${completed.filter(r=>r.status==='ready').length} / ${selected.length} 個模型。各模型耗時包含首次下載。`;
+    }
+});
+$('show-model-storage').onclick=protect(async()=>{
+    if(batchRunning)throw new Error('請等辨識完成或先取消。');
+    const {modelStorage,clearModel}=await import('./engine-assets.js?build=4d81c25651ac'),info=await modelStorage(),host=$('model-storage');host.replaceChildren();
+    host.append(node('p',`共用推論引擎 ${(info.runtimeBytes/1048576).toFixed(1)} MB（由瀏覽器快取，非 RAM）。`));
+    for(const item of info.items){const line=node('div',undefined,'model-storage-line');line.append(node('span',`${engineById(item.id)?.name}：${(item.bytes/1048576).toFixed(1)} MB · ${item.installed?'已下載保存':'尚未完整下載'}`));const clear=node('button','移除這個模型快取');clear.type='button';clear.onclick=protect(async()=>{if(!confirm('只移除此模型的已下載權重？校正結果與教材不動。'))return;await clearModel(item.id);$('show-model-storage').click();});line.append(clear);host.append(line);}
 });
 $('add-row').onclick=()=>{if(rows.length>=100){notice('每批最多 100 列。',true);return;}rows.push(newRow());renderRows();save();$('rows').lastElementChild.querySelector('input').focus();};
 $('confirm-valid').onclick=protect(async()=>{if(!rows.length)throw new Error('目前沒有結果。');if(!confirm('確認已對照原圖核對所有有效時間？此動作不是自動辨識驗證。'))return;for(const row of rows)if(parseTime(row.value).valid)await confirmRow(row);renderRows();save();});
 function download(blob,name){const url=URL.createObjectURL(blob),link=node('a');link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
-for(const format of ['txt','csv'])$(format).onclick=protect(async()=>{const text=exportTimes(rows,format);$('output').value=exportTimes(rows,'txt');download(new Blob([text],{type:format==='csv'?'text/csv;charset=utf-8':'text/plain;charset=utf-8'}),'Oc-Times.'+format);notice('已交給瀏覽器下載；原有草稿仍保留。');});
+for(const format of ['txt','csv'])$(format).onclick=protect(async()=>{const text=exportTimes(rows,format);$('output').value=exportTimes(rows,'txt');download(new Blob([text],{type:format==='csv'?'text/csv;charset=utf-8':'text/plain;charset=utf-8'}),'Oc-Times'+(activeEngine&&activeEngine!=='legacy'?'-'+activeEngine:'')+'.'+format);notice('已交給瀏覽器下載；原有草稿仍保留。');});
 $('copy').onclick=protect(async()=>{const text=exportTimes(rows);$('output').value=text;try{await navigator.clipboard.writeText(text);notice('時間已複製。');}catch{$('output').focus();$('output').select();notice('剪貼簿未獲允許；請長按下面文字自行複製。',true);}});
 async function refreshMetrics(){try{const data=await store.metrics();$('storage-status').textContent=`草稿 ${data.rows} 列 · 教材 ${data.samples} / 2,000 列 · 約 ${(data.bytes/1024).toFixed(1)} KB`; }catch(error){$('storage-status').textContent='讀取失敗：'+error.message;}}
 $('export-training').onclick=protect(async()=>{
     const samples=await store.allSamples();if(!samples.length)throw new Error('尚未收集教材。先勾選收集字跡，再確認有原圖的時間列。');
-    const {zipFiles}=await import('./zip.js?build=6ea10ff10bf7');
+    const {zipFiles}=await import('./zip.js?build=4d81c25651ac');
     const labels=[],files=[];
     samples.forEach((sample,index)=>{
         const name=`images/${String(index+1).padStart(6,'0')}.png`;
@@ -162,14 +218,12 @@ $('export-training').onclick=protect(async()=>{
     download(zipFiles(files),'TimeOcrTraining.zip');notice('已匯出教材 ZIP。確認檔案可讀後，才自行決定是否清除教材。');
 });
 $('clear-training').onclick=protect(async()=>{if(!confirm('只清除此裝置的 Oc 教材？草稿與 StrForge 資料不動。'))return;await store.clearSamples();await refreshMetrics();notice('Oc 教材已清除。');});
-$('clear-draft').onclick=protect(async()=>{if(!confirm('清除 Oc 校正草稿？教材與 StrForge 資料不動。'))return;await saving;await store.clearDraft();rows=[];renderRows();await refreshMetrics();notice('Oc 校正草稿已清除。');});
-window.addEventListener('pagehide',()=>{job++;endWorker();});
+$('clear-draft').onclick=protect(async()=>{if(batchRunning)throw new Error('請先取消辨識。');if(!confirm('清除 Oc 校正草稿？教材與 StrForge 資料不動。'))return;await saving;await store.clearDraft();rows=[];modelRuns=[];activeEngine=null;renderRows();await refreshMetrics();notice('Oc 校正草稿已清除。');});
+window.addEventListener('pagehide',()=>{cancelBatch();});
 try{
     const draft=await store.getState('draft');
-    if(draft&&draft.schema!==1){storageSafe=false;throw new Error('保存資料版本較新；不覆蓋未知格式。');}
-    if(draft){
-        const valid=Array.isArray(draft.rows)&&draft.rows.length<=100&&draft.rows.every(row=>row&&typeof row.id==='string'&&typeof row.value==='string'&&typeof row.thumbnail==='string'&&typeof row.raw==='string'&&typeof row.reason==='string'&&Array.isArray(row.predictions)&&row.predictions.every(p=>p&&Number.isFinite(p.score)&&Number.isFinite(p.margin)&&Array.isArray(p.candidates)&&p.candidates.every(c=>Number.isInteger(c.digit)&&c.digit>=0&&c.digit<=9)));
-        if(!valid){storageSafe=false;throw new Error('草稿格式無效，未自動清除。');}rows=draft.rows;
-    }
+    const restored=restoreDraft(draft);rows=restored.rows;modelRuns=restored.runs;activeEngine=restored.activeEngine;
 }catch(error){storageSafe=false;notice('無法還原本機草稿：'+error.message+'。資料未被清除。',true);}
 renderRows();
+
+try{const choice=await store.getState('engine-selection');if(choice?.schema===1&&Array.isArray(choice.ids)&&choice.ids.every(id=>engineById(id)))for(const input of document.querySelectorAll('input[name=engine]'))input.checked=choice.ids.includes(input.value);}catch{ /* Core draft restore already reports storage restrictions. */ }

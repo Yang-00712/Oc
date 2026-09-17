@@ -23,7 +23,19 @@ export function thresholdImage(rgba,width,height) {
         if(variance>best) {best=variance;cut=i;}
     }
     if(best<=0) return {mask:new Uint8Array(gray.length),width,height};
-    const mask=Uint8Array.from(gray,n=>n<=cut?1:0);
+    // Local contrast is essential on folded/shadowed paper. A global Otsu
+    // threshold alone turns shadows and show-through into bridges between rows.
+    const stride=width+1,sumTable=new Float64Array((width+1)*(height+1)),sqTable=new Float64Array(sumTable.length);
+    for(let y=0;y<height;y++){let sum=0,sq=0;for(let x=0;x<width;x++){const v=gray[y*width+x];sum+=v;sq+=v*v;const i=(y+1)*stride+x+1;sumTable[i]=sumTable[i-stride]+sum;sqTable[i]=sqTable[i-stride]+sq;}}
+    const radius=Math.max(9,Math.min(25,Math.round(width/8))),mask=new Uint8Array(gray.length);
+    for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+        const x0=Math.max(0,x-radius),y0=Math.max(0,y-radius),x1=Math.min(width,x+radius+1),y1=Math.min(height,y+radius+1),n=(x1-x0)*(y1-y0);
+        const area=t=>t[y1*stride+x1]-t[y0*stride+x1]-t[y1*stride+x0]+t[y0*stride+x0];
+        const mean=area(sumTable)/n,std=Math.sqrt(Math.max(0,area(sqTable)/n-mean*mean));
+        const local=mean*(1+.24*(std/128-1));
+        mask[y*width+x]=gray[y*width+x]<=Math.min(cut,local)?1:0;
+    }
+
     for(const [horizontal,size,other] of [[true,height,width],[false,width,height]]) {
         const projection=new Uint8Array(size);
         for(let a=0;a<size;a++) {let n=0;for(let b=0;b<other;b++) n+=mask[horizontal?a*width+b:b*width+a];projection[a]=n>=other*.90?1:0;}
@@ -62,7 +74,9 @@ export function segment(rgba,width,height,options={}) {
     if(!Number.isInteger(fixed)||fixed<0||fixed>100) throw new Error('列數請填 1–100，或留空自動判斷。');
     const projection=new Uint8Array(height);
     for(let y=0;y<height;y++) {let count=0;for(let x=0;x<width;x++) count+=mask[y*width+x];projection[y]=count>=2?1:0;}
-    let bands=fixed?Array.from({length:fixed},(_,i)=>[Math.floor(i*height/fixed),Math.floor((i+1)*height/fixed)]):runs(projection,Math.max(1,Math.round(height/700))).filter(([s,e])=>e-s>=4);
+    let bands=runs(projection,Math.max(2,Math.min(4,Math.round(height/700)))).filter(([s,e])=>e-s>=4);
+    // A requested count is a check, not permission to divide unequal handwriting evenly.
+    if(fixed&&bands.length!==fixed)throw new Error(`自動找到 ${bands.length} 列，與指定 ${fixed} 列不同。請框近時間欄或分段辨識；不會等高硬切混入多列。`);
     if(!bands.length) throw new Error('未找到數字列。請框近時間欄、拍正紙張並避開反光。');
     if(bands.length>100) throw new Error('偵測超過 100 列；請縮小範圍或指定列數。');
     return bands.map(([start,end])=>{
@@ -74,8 +88,11 @@ export function segment(rgba,width,height,options={}) {
             const b=bounds(mask,width,box.x+s,box.y,box.x+e,box.y+box.height);return b&&b.ink>=3;
         });
         const automatic=options.digitMode!=='equal' && groups.length===4;
-        const split=automatic?groups.map(([s,e])=>[box.x+s,box.x+e]):Array.from({length:4},(_,i)=>[Math.floor(i*width/4),Math.floor((i+1)*width/4)]);
+        const split=automatic?groups.map(([s,e])=>[box.x+s,box.x+e]):Array.from({length:4},(_,i)=>[box.x+Math.floor(i*box.width/4),box.x+Math.floor((i+1)*box.width/4)]);
         const glyphs=split.map(([s,e])=>normalizeDigit(mask,width,bounds(mask,width,s,start,e,end)));
-        return {box:{x:0,y:start,width,height:end-start},glyphs,uncertain:!automatic,reason:automatic?'':'等寬切四格，請核對切字位置。'};
+        const pad=Math.max(2,Math.round(box.height*.12));
+        const x=Math.max(0,box.x-pad),y=Math.max(start,box.y-pad);
+        const lineBox={x,y,width:Math.min(width,box.x+box.width+pad)-x,height:Math.min(end,box.y+box.height+pad)-y};
+        return {box:{x:0,y:start,width,height:end-start},lineBox,glyphs,uncertain:!automatic,reason:automatic?'':'按該列墨跡範圍切四格；請核對。'};
     });
 }

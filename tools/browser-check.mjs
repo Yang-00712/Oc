@@ -31,7 +31,7 @@ for(const [name,engine,options] of [['chromium',chromium,{viewport:{width:390,he
   await page.locator('#recognize').click();await page.waitForSelector('#review:not([hidden])');
   const values=await page.locator('.row-edit input').evaluateAll(items=>items.map(item=>item.value));assert.deepEqual(values,['0900','0910','1002','1004']);
   await page.locator('#copy').click();assert.match(await page.locator('#notice').innerText(),/確認/);
-  await page.locator('#collect').check();await page.locator('.row-edit input').nth(2).fill('1003');
+  await page.locator('.review-tools summary').click();await page.locator('#collect').check();await page.locator('.row-edit input').nth(2).fill('1003');
   await page.locator('#confirm-valid').click();await page.waitForFunction(()=>document.querySelector('#review-count').textContent.includes('已確認 4 列'));
   await page.waitForFunction(()=>document.querySelector('#save-status').textContent.includes('已保存'));
   await page.locator('#txt').click();await page.waitForFunction(()=>document.querySelector('#output').value.includes('10:03'));
