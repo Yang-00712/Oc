@@ -1,0 +1,31 @@
+name: Prepare downloadable OCR model ZIPs
+on:
+  push:
+    branches: [fix/model-zip-install]
+    paths: [.github/workflows/prepare-model-packs.yml, tools/model-packs.py]
+permissions:
+  contents: write
+concurrency:
+  group: oc-model-pack-preparation
+  cancel-in-progress: false
+jobs:
+  packs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Build only pinned public model bundles
+        run: python tools/model-packs.py
+      - name: Publish the two fixed ZIP download paths on this branch only
+        run: |
+          mkdir -p downloads
+          cp test-report/model-packs/Oc-Models.zip downloads/Oc-Models.zip
+          cp test-report/model-packs/Oc-PP-OCRv5-General.zip downloads/Oc-PP-OCRv5-General.zip
+          git add -- downloads/Oc-Models.zip downloads/Oc-PP-OCRv5-General.zip
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Add complete validated model ZIPs for manual phone import'
+            git push origin HEAD:fix/model-zip-install
+          fi
