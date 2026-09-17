@@ -1,0 +1,179 @@
+{
+  "dataset": "MNIST",
+  "datasetUrl": "https://storage.googleapis.com/tensorflow/tf-keras-datasets/mnist.npz",
+  "datasetSha256": "731c5ac602752760c8e48fbffcf8c3b850d9dc2a2aedcf2cc48468fc17b673d1",
+  "trainCount": 55000,
+  "validationCount": 5000,
+  "testCount": 10000,
+  "testAccuracy": 0.9895,
+  "confusion": [
+    [
+      974,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      2,
+      1,
+      0
+    ],
+    [
+      0,
+      1131,
+      1,
+      0,
+      0,
+      0,
+      0,
+      3,
+      0,
+      0
+    ],
+    [
+      0,
+      3,
+      1017,
+      0,
+      1,
+      0,
+      0,
+      10,
+      1,
+      0
+    ],
+    [
+      0,
+      0,
+      1,
+      1003,
+      0,
+      2,
+      0,
+      3,
+      1,
+      0
+    ],
+    [
+      0,
+      0,
+      1,
+      0,
+      973,
+      0,
+      0,
+      5,
+      0,
+      3
+    ],
+    [
+      0,
+      0,
+      0,
+      4,
+      0,
+      884,
+      1,
+      1,
+      0,
+      2
+    ],
+    [
+      3,
+      3,
+      1,
+      0,
+      6,
+      5,
+      935,
+      1,
+      4,
+      0
+    ],
+    [
+      0,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1026,
+      0,
+      0
+    ],
+    [
+      3,
+      0,
+      1,
+      1,
+      1,
+      2,
+      0,
+      2,
+      961,
+      3
+    ],
+    [
+      0,
+      1,
+      0,
+      1,
+      6,
+      2,
+      0,
+      8,
+      0,
+      991
+    ]
+  ],
+  "seed": 712,
+  "epochs": 8,
+  "history": [
+    {
+      "epoch": 1,
+      "trainLoss": 0.2983920852791179,
+      "validationAccuracy": 0.9696
+    },
+    {
+      "epoch": 2,
+      "trainLoss": 0.09619482490149411,
+      "validationAccuracy": 0.9772
+    },
+    {
+      "epoch": 3,
+      "trainLoss": 0.07410770147551189,
+      "validationAccuracy": 0.9824
+    },
+    {
+      "epoch": 4,
+      "trainLoss": 0.06295117554894902,
+      "validationAccuracy": 0.9848
+    },
+    {
+      "epoch": 5,
+      "trainLoss": 0.05570117202076045,
+      "validationAccuracy": 0.9862
+    },
+    {
+      "epoch": 6,
+      "trainLoss": 0.043067410681464455,
+      "validationAccuracy": 0.9874
+    },
+    {
+      "epoch": 7,
+      "trainLoss": 0.040433571861006996,
+      "validationAccuracy": 0.9876
+    },
+    {
+      "epoch": 8,
+      "trainLoss": 0.03799929638762366,
+      "validationAccuracy": 0.988
+    }
+  ],
+  "seconds": 50.26,
+  "limitation": "Single MNIST digits only. Not a measurement of user handwriting, photographed columns, row segmentation or four-digit time accuracy.",
+  "modelSha256": "cf9e67750cb57d02c0b0158d24a840c9d2d0a68b8492c732a9fda839ce1805cc",
+  "modelBytes": 62837
+}

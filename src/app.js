@@ -1,6 +1,6 @@
-import { parseTime, exportTimes, orderWarnings } from './time.js';
-import { decodePhoto, rotatedPhoto, cropPhoto, thumbnail } from './photo.js';
-import * as store from './store.js';
+import { parseTime, exportTimes, orderWarnings } from './time.js?build=6ea10ff10bf7';
+import { decodePhoto, rotatedPhoto, cropPhoto, thumbnail } from './photo.js?build=6ea10ff10bf7';
+import * as store from './store.js?build=6ea10ff10bf7';
 
 const $=id=>document.getElementById(id);
 let rows=[], source=null, photo=null, roi={x:0,y:0,w:1,h:1},worker=null,job=0,timer=null,saving=Promise.resolve(),storageSafe=true;
@@ -123,7 +123,7 @@ $('recognize').onclick=protect(async()=>{
     if(worker||!photo)return;
     if(rows.length&&!confirm('重新辨識會在成功後替換目前校正草稿。已確認要繼續？'))return;
     const crop=cropPhoto(photo,roi),pixels=crop.getContext('2d').getImageData(0,0,crop.width,crop.height),id=++job;
-    worker=new Worker(new URL('./ocr-worker.js',import.meta.url),{type:'module'});$('recognize').disabled=true;$('cancel').hidden=false;
+    worker=new Worker(new URL('./ocr-worker.js?build=6ea10ff10bf7',import.meta.url),{type:'module'});$('recognize').disabled=true;$('cancel').hidden=false;
     const fail=message=>{if(id!==job)return;endWorker();notice(message,true);$('progress').textContent='辨識未完成；原有結果保留，可重試或到校正頁手動輸入。';crop.width=1;crop.height=1;};
     timer=setTimeout(()=>fail('辨識等待超過 90 秒，已停止本次 Worker；不會自動反覆重抓。'),90000);
     worker.onerror=event=>fail('辨識模組錯誤：'+event.message);
@@ -149,7 +149,7 @@ $('copy').onclick=protect(async()=>{const text=exportTimes(rows);$('output').val
 async function refreshMetrics(){try{const data=await store.metrics();$('storage-status').textContent=`草稿 ${data.rows} 列 · 教材 ${data.samples} / 2,000 列 · 約 ${(data.bytes/1024).toFixed(1)} KB`; }catch(error){$('storage-status').textContent='讀取失敗：'+error.message;}}
 $('export-training').onclick=protect(async()=>{
     const samples=await store.allSamples();if(!samples.length)throw new Error('尚未收集教材。先勾選收集字跡，再確認有原圖的時間列。');
-    const {zipFiles}=await import('./zip.js');
+    const {zipFiles}=await import('./zip.js?build=6ea10ff10bf7');
     const labels=[],files=[];
     samples.forEach((sample,index)=>{
         const name=`images/${String(index+1).padStart(6,'0')}.png`;

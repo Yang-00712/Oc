@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "file": "time-digit.json",
+  "sha256": "cf9e67750cb57d02c0b0158d24a840c9d2d0a68b8492c732a9fda839ce1805cc",
+  "dataset": "MNIST",
+  "personalized": false
+}
