@@ -1,14 +1,14 @@
-import { segment } from './segmentation.js?build=4d81c25651ac';
-import { prepareLine, decodeCTC } from './paddle.js?build=4d81c25651ac';
-import { normalizedTranscript, engineById } from './engines.js?build=4d81c25651ac';
-import { loadEngineAssets } from './engine-assets.js?build=4d81c25651ac';
+import { segment } from './segmentation.js?build=f95b520a6869';
+import { prepareLine, decodeCTC } from './paddle.js?build=f95b520a6869';
+import { normalizedTranscript, engineById } from './engines.js?build=f95b520a6869';
 self.onmessage=async({data})=>{
- const {id,engine,rgba,width,height,options}=data;let session;
+ const {id,engine,rgba,width,height,options,assets}=data;let session;
  const progress=message=>self.postMessage({id,type:'progress',message});
  try{
   if(engineById(engine)?.kind!=='line')throw new Error('未知整列模型。');
-  progress('準備 '+engine+'，只下載模型，不上傳照片。');
-  const assets=await loadEngineAssets(engine,progress);
+  if(!assets||assets.config?.id!==engine||!(assets.weights instanceof ArrayBuffer))throw new Error('缺少已驗證的模型權重。');
+  // Parent window has already verified and cached the weights. Transfer avoids
+  // duplicating their buffer and the cache survives termination of this Worker.
   const ort=await import(assets.mainUrl);
   ort.env.wasm.numThreads=1;ort.env.wasm.proxy=false;
   ort.env.wasm.wasmPaths={mjs:assets.glueUrl,wasm:assets.wasmUrl};

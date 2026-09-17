@@ -34,12 +34,25 @@ for(const[name,engine,options]of[['chromium',chromium,{viewport:{width:390,heigh
   assert.equal((await readRows(page))[0],'0905');await page.locator('.result-tab[data-engine="ppocr-v5-en"]').click();assert.equal((await readRows(page))[0],'0910');
   await page.locator('[data-tab=settings]').click();await page.locator('#show-model-storage').click();await page.waitForFunction(()=>document.querySelector('#model-storage').children.length>0||document.querySelector('#notice').classList.contains('error'));
   console.log('CACHE_DIAGNOSTIC',name,JSON.stringify(await page.evaluate(async()=>({notice:document.querySelector('#notice').textContent,storage:document.querySelector('#model-storage').textContent,keys:await caches.keys()}))));
-  assert.match(await page.locator('#model-storage').innerText(),/已下載保存/);
+  assert.equal((await page.locator('#model-storage').innerText()).match(/已下載保存/g)?.length,3,'All three selected weight sets persist after their Workers terminate');
   await page.screenshot({path:`test-report/${name}-multi-model-storage.png`,fullPage:true});
   assert.equal(await page.evaluate(()=>localStorage.getItem('strforge.state.v2')),'KEEP');
   const bad=requests.filter(r=>!r.url.startsWith(base)&&!r.url.startsWith('blob:http://127.0.0.1:4173/')&&!r.url.startsWith('data:image/'));
   assert.deepEqual(bad,[]);assert.equal(requests.some(r=>r.method!=='GET'||r.post),false,'No image upload or external inference');assert.deepEqual(errors,[]);
   reports.push({browser:name,engines:raw,independentEdits:true,draftReload:true,activeExport:true,noUpload:true,errors});
+  // Window-owned model cache must be visible after reopen and avoid weight re-download.
+  await page.locator('#model-storage .model-storage-line').last().locator('button').click();
+  await page.waitForFunction(()=>document.querySelector('#model-storage').textContent.includes('尚未完整下載'));
+  assert.equal((await page.locator('#model-storage').innerText()).match(/已下載保存/g)?.length,2);
+  await page.locator('[data-tab=review]').click();assert.equal((await readRows(page))[0],'0910');
+  await page.locator('[data-tab=scan]').click();await page.locator('#demo').click();
+  for(const id of ['cnn','ppocr-v5-ch','ppocr-v4-en'])await page.locator(`input[name=engine][value="${id}"]`).uncheck();
+  const beforeWarm=requests.length;
+  await page.locator('#recognize').click();await page.waitForSelector('#review:not([hidden])',{timeout:240000});
+  assert.deepEqual(await readRows(page),raw['ppocr-v5-en']);
+  assert.equal(requests.slice(beforeWarm).some(r=>r.url.includes('/models/ppocr-v5-en/model.onnx')),false,'Verified cached weights must not be downloaded again');
+  reports.at(-1).warmWeights=true;reports.at(-1).modelRemovalIsolated=true;
+  await page.locator('[data-tab=scan]').click();await page.locator('input[name=engine][value="cnn"]').check();
   // Simulate a blocked selected model after CNN completion: cancelling must retain CNN.
   await page.locator('[data-tab=scan]').click();await page.locator('#demo').click();
   for(const id of ['ppocr-v5-ch','ppocr-v4-en'])await page.locator(`input[name=engine][value="${id}"]`).uncheck();

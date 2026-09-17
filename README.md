@@ -22,9 +22,9 @@ PP-OCR模型由GitHub runner取得已訓練且固定雜湊的權重，隨本站�
 
 「收集我確認的字跡」預設關閉，勾選後在人工確認時保存列縮圖與四位答案，最多2000列；設定頁可匯出 `TimeOcrTraining.zip`。它是教材，不是模型，不會自動上傳或訓練。未核對的切字不能當成每個數字的訓練標籤。
 
-初始模型在 GitHub Actions 用 MNIST 公開資料訓練，權重在 `models/time-digit.json`。手機只在點辨識時透過 Worker 載入；推論採與 PyTorch 對齊的小型 JavaScript 實作，不下載通用 ONNX/TensorFlow runtime。模型不是用你的字跡訓練；MNIST 單字測試不代表實拍時間正確率。完整度量在 `models/training-metrics.json`。
+原有 CNN 模型在 GitHub Actions 用 MNIST 公開資料訓練，權重在 `models/time-digit.json`。手機只在點辨識時透過 Worker 載入；此 CNN 的推論採與 PyTorch 對齊的小型 JavaScript 實作，不需 ONNX runtime；只有選 PP-OCR 時才載入共用 ONNX Runtime Web。模型不是用你的字跡訓練；MNIST 單字測試不代表實拍時間正確率。完整度量在 `models/training-metrics.json`。
 
-本版沒有 Service Worker 或整站離線保證。模型權重保存於專用 CacheStorage，清理模型不清草稿。每次只執行一個 Worker；模型錯誤、取消或單一模型超過4分鐘時停止該 Worker，保留已完成的其他模型。不攔截全域 fetch、不自動反覆重抓。
+本版沒有 Service Worker 或整站離線保證。模型權重由 Window 保存於專用 CacheStorage，再以 transferable ArrayBuffer 交給 Worker；不依賴 Worker 與 Window 共用快取。清理模型不清草稿。每次只執行一個 Worker；模型錯誤、取消或單一模型超過4分鐘時停止該 Worker，保留已完成的其他模型。不攔截全域 fetch、不自動反覆重抓。
 
 ## 開發與檢查
 
