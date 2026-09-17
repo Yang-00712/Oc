@@ -1,8 +1,8 @@
-import { parseTime, exportTimes, orderWarnings } from './time.js?build=f95b520a6869';
-import { decodePhoto, rotatedPhoto, cropPhoto, thumbnail } from './photo.js?build=f95b520a6869';
-import { ENGINES, engineById, selectedEngines, comparisonStats } from './engines.js?build=f95b520a6869';
-import { restoreDraft, snapshotDraft } from './multi-state.js?build=f95b520a6869';
-import * as store from './store.js?build=f95b520a6869';
+import { parseTime, exportTimes, orderWarnings } from './time.js?build=80613cecd6f2';
+import { decodePhoto, rotatedPhoto, cropPhoto, thumbnail } from './photo.js?build=80613cecd6f2';
+import { ENGINES, engineById, selectedEngines, comparisonStats } from './engines.js?build=80613cecd6f2';
+import { restoreDraft, snapshotDraft } from './multi-state.js?build=80613cecd6f2';
+import * as store from './store.js?build=80613cecd6f2';
 
 const $=id=>document.getElementById(id);
 let rows=[], source=null, photo=null, roi={x:0,y:0,w:1,h:1},worker=null,job=0,timer=null,saving=Promise.resolve(),storageSafe=true;
@@ -156,12 +156,12 @@ function runEngine(engine,pixels,crop,options){
             let assets;
             if(engine.kind==='line'){
                 assetController=new AbortController();const signal=assetController.signal;
-                const {loadEngineAssets}=await import('./engine-assets.js?build=f95b520a6869');
+                const {loadEngineAssets}=await import('./engine-assets.js?build=80613cecd6f2');
                 if(id!==job||settled)return;
                 assets=await loadEngineAssets(engine.id,progress,signal);
                 if(id!==job||settled)return;
             }
-            worker=new Worker(new URL(engine.id==='cnn'?'./ocr-worker.js?build=f95b520a6869':'./line-worker.js?build=f95b520a6869',import.meta.url),{type:'module'});
+            worker=new Worker(new URL(engine.id==='cnn'?'./ocr-worker.js?build=80613cecd6f2':'./line-worker.js?build=80613cecd6f2',import.meta.url),{type:'module'});
             worker.onerror=event=>finish(null,'辨識模組錯誤：'+event.message);
             worker.onmessage=({data})=>{
                 if(data.id!==job||settled)return;
@@ -206,7 +206,7 @@ $('recognize').onclick=protect(async()=>{
 });
 $('show-model-storage').onclick=protect(async()=>{
     if(batchRunning)throw new Error('請等辨識完成或先取消。');
-    const {modelStorage,clearModel}=await import('./engine-assets.js?build=f95b520a6869'),info=await modelStorage(),host=$('model-storage');host.replaceChildren();
+    const {modelStorage,clearModel}=await import('./engine-assets.js?build=80613cecd6f2'),info=await modelStorage(),host=$('model-storage');host.replaceChildren();
     host.append(node('p',`共用推論引擎 ${(info.runtimeBytes/1048576).toFixed(1)} MB（由瀏覽器快取，非 RAM）。`));
     for(const item of info.items){const line=node('div',undefined,'model-storage-line');line.append(node('span',`${engineById(item.id)?.name}：${(item.bytes/1048576).toFixed(1)} MB · ${item.installed?'已下載保存':'尚未完整下載'}`));const clear=node('button','移除這個模型快取');clear.type='button';clear.onclick=protect(async()=>{if(!confirm('只移除此模型的已下載權重？校正結果與教材不動。'))return;await clearModel(item.id);$('show-model-storage').click();});line.append(clear);host.append(line);}
 });
@@ -218,7 +218,7 @@ $('copy').onclick=protect(async()=>{const text=exportTimes(rows);$('output').val
 async function refreshMetrics(){try{const data=await store.metrics();$('storage-status').textContent=`草稿 ${data.rows} 列 · 教材 ${data.samples} / 2,000 列 · 約 ${(data.bytes/1024).toFixed(1)} KB`; }catch(error){$('storage-status').textContent='讀取失敗：'+error.message;}}
 $('export-training').onclick=protect(async()=>{
     const samples=await store.allSamples();if(!samples.length)throw new Error('尚未收集教材。先勾選收集字跡，再確認有原圖的時間列。');
-    const {zipFiles}=await import('./zip.js?build=f95b520a6869');
+    const {zipFiles}=await import('./zip.js?build=80613cecd6f2');
     const labels=[],files=[];
     samples.forEach((sample,index)=>{
         const name=`images/${String(index+1).padStart(6,'0')}.png`;

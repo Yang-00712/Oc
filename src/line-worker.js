@@ -1,6 +1,6 @@
-import { segment } from './segmentation.js?build=f95b520a6869';
-import { prepareLine, decodeCTC } from './paddle.js?build=f95b520a6869';
-import { normalizedTranscript, engineById } from './engines.js?build=f95b520a6869';
+import { segment } from './segmentation.js?build=80613cecd6f2';
+import { prepareLine, decodeCTC } from './paddle.js?build=80613cecd6f2';
+import { normalizedTranscript, engineById } from './engines.js?build=80613cecd6f2';
 self.onmessage=async({data})=>{
  const {id,engine,rgba,width,height,options,assets}=data;let session;
  const progress=message=>self.postMessage({id,type:'progress',message});

@@ -1,4 +1,4 @@
-import { engineById } from './engines.js?build=f95b520a6869';
+import { engineById } from './engines.js?build=80613cecd6f2';
 export function validRows(rows){return Array.isArray(rows)&&rows.length<=100&&rows.every(row=>row&&typeof row.id==='string'&&typeof row.value==='string'&&typeof row.thumbnail==='string'&&typeof row.raw==='string'&&typeof row.reason==='string'&&Array.isArray(row.predictions)&&row.predictions.every(p=>p&&Number.isFinite(p.score)&&Number.isFinite(p.margin)&&Array.isArray(p.candidates)&&p.candidates.every(c=>Number.isInteger(c.digit)&&c.digit>=0&&c.digit<=9)));}
 export function restoreDraft(draft){
  if(!draft)return {runs:[],activeEngine:null,rows:[]};
