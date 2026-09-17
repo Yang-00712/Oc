@@ -32,7 +32,9 @@ for(const[name,engine,options]of[['chromium',chromium,{viewport:{width:390,heigh
   await page.screenshot({path:`test-report/${name}-multi-review.png`,fullPage:true});
   await page.reload();await page.locator('[data-tab=review]').click();await page.waitForFunction(()=>document.querySelectorAll('.result-tab').length===4);
   assert.equal((await readRows(page))[0],'0905');await page.locator('.result-tab[data-engine="ppocr-v5-en"]').click();assert.equal((await readRows(page))[0],'0910');
-  await page.locator('[data-tab=settings]').click();await page.locator('#show-model-storage').click();await page.waitForFunction(()=>document.querySelector('#model-storage').textContent.includes('已下載保存'));
+  await page.locator('[data-tab=settings]').click();await page.locator('#show-model-storage').click();await page.waitForFunction(()=>document.querySelector('#model-storage').children.length>0||document.querySelector('#notice').classList.contains('error'));
+  console.log('CACHE_DIAGNOSTIC',name,JSON.stringify(await page.evaluate(async()=>({notice:document.querySelector('#notice').textContent,storage:document.querySelector('#model-storage').textContent,keys:await caches.keys()}))));
+  assert.match(await page.locator('#model-storage').innerText(),/已下載保存/);
   await page.screenshot({path:`test-report/${name}-multi-model-storage.png`,fullPage:true});
   assert.equal(await page.evaluate(()=>localStorage.getItem('strforge.state.v2')),'KEEP');
   const bad=requests.filter(r=>!r.url.startsWith(base)&&!r.url.startsWith('blob:http://127.0.0.1:4173/')&&!r.url.startsWith('data:image/'));
@@ -48,7 +50,7 @@ for(const[name,engine,options]of[['chromium',chromium,{viewport:{width:390,heigh
   await page.waitForFunction(()=>!document.querySelector('#review').hidden);assert.deepEqual(await readRows(page),['0900','0910','1002','1004']);
   reports.at(-1).cancelPreservesCompleted=true;
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
- }finally{await context.close();await browser.close();}
+ }catch(error){console.log('MULTI_FAILURE',name,JSON.stringify({error:String(error),notice:await page.locator('#notice').innerText(),errors}));await page.screenshot({path:`test-report/${name}-multi-failed.png`,fullPage:true});throw error;}finally{await context.close();await browser.close();}
 }
 console.log('MULTI_MODEL_RESULT',JSON.stringify(reports));await writeFile('test-report/multi-models.json',JSON.stringify(reports,null,2));
 }finally{server.kill();}
