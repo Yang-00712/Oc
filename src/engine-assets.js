@@ -1,7 +1,7 @@
 // Window owns verified model AND runtime storage. No photograph goes to a server.
-import { readModelFile, writeModelFile, modelFileKeys, removeModelFiles } from './model-cache.js?build=26a84d591301';
-import { LOCAL_ASSETS } from './model-catalog.js?build=26a84d591301';
-import { checkCancelled, downloadAsset } from './asset-download.js?build=26a84d591301';
+import { readModelFile, writeModelFile, modelFileKeys, removeModelFiles } from './model-cache.js?build=6ac4ff17052f';
+import { LOCAL_ASSETS } from './model-catalog.js?build=6ac4ff17052f';
+import { checkCancelled, downloadAsset } from './asset-download.js?build=6ac4ff17052f';
 const base=new URL('../',import.meta.url);
 export const sha=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),x=>x.toString(16).padStart(2,'0')).join('');
 export function assetUrl(asset){

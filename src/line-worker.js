@@ -1,6 +1,6 @@
-import { segment } from './segmentation.js?build=26a84d591301';
-import { prepareLine, decodeCTC } from './paddle.js?build=26a84d591301';
-import { normalizedTranscript, engineById } from './engines.js?build=26a84d591301';
+import { segment } from './segmentation.js?build=6ac4ff17052f';
+import { prepareLine, decodeCTC } from './paddle.js?build=6ac4ff17052f';
+import { normalizedTranscript, engineById } from './engines.js?build=6ac4ff17052f';
 self.onmessage=async({data})=>{
  const {id,engine,rgba,width,height,options,assets}=data;let session,stage='準備辨識';const localUrls=[];
  const progress=message=>{stage=message;self.postMessage({id,type:'progress',message});};
@@ -34,8 +34,8 @@ self.onmessage=async({data})=>{
    const tensor=new ort.Tensor('float32',input.data,input.dims);let outputs;
    try{
     outputs=await session.run({[assets.config.inputName]:tensor});
-    const output=outputs[assets.config.outputName],result=decodeCTC(output.data,output.dims,assets.config.characters);
-    rows.push({box:piece.box,raw:normalizedTranscript(result.raw),transcript:result.raw,predictions:[],score:result.score,uncertain:true,reason:'整列辨識；請核對，不以模型分數比較不同模型。',modelHash:assets.modelHash});
+    const output=outputs[assets.config.outputName],result=decodeCTC(output.data,output.dims,assets.config.characters,{digitsOnly:true});
+    rows.push({box:piece.box,raw:normalizedTranscript(result.raw),transcript:result.unrestrictedRaw,numericOnly:true,predictions:[],score:result.score,uncertain:true,reason:'僅辨識數字 0–9；未補字或修正時間。'+(result.restrictedFrames?'已排除非數字候選，請核對原圖。':''),modelHash:assets.modelHash});
    }finally{tensor.dispose();if(outputs)for(const t of Object.values(outputs))t.dispose();}
    progress(`辨識第 ${i+1} / ${pieces.length} 列`);
   }

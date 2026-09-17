@@ -18,8 +18,20 @@ for(const[name,engine,options]of[['chromium',chromium,{viewport:{width:390,heigh
   await page.locator('#demo').click();await page.waitForSelector('#photo-editor:not([hidden])');
   await page.locator('#recognize').click();await page.waitForSelector('#review:not([hidden])',{timeout:240000});
   await page.waitForFunction(()=>document.querySelectorAll('.result-tab').length===4);
+  assert.match(await page.locator('#digits-only-note').innerText(),/0–9/);
   assert.equal(await page.locator('.result-tab:disabled').count(),0,'Each engine must actually finish');
-  const raw={};for(const id of ['cnn','ppocr-v5-en','ppocr-v5-ch','ppocr-v4-en']){await page.locator(`.result-tab[data-engine="${id}"]`).click();raw[id]=await readRows(page);assert.equal(raw[id].length,4);assert.ok(raw[id].some(Boolean),'Real inference must produce text');}
+  const raw={};for(const id of ['cnn','ppocr-v5-en','ppocr-v5-ch','ppocr-v4-en']){await page.locator(`.result-tab[data-engine="${id}"]`).click();raw[id]=await readRows(page);assert.equal(raw[id].length,4);assert.ok(raw[id].some(Boolean),'Real inference must produce text');assert.ok(raw[id].every(value=>/^[0-9]*$/.test(value)),'Each model emits digits only');}
+  await page.waitForFunction(()=>document.querySelector('#save-status').textContent.includes('已保存'));
+  const numericDraft=await page.evaluate(async()=>await(await import('./src/store.js')).getState('draft'));
+  for(const run of numericDraft.modelResults.filter(run=>run.engine!=='cnn'))for(const row of run.rows){
+   assert.equal(row.numericOnly,true);assert.match(row.raw,/^[0-9]*$/);assert.equal(typeof row.transcript,'string');assert.equal(row.confirmed,false);
+  }
+  // Reading details shows preserved full-alphabet text via textContent, never
+  // merges it into the editable numeric output or silently confirms the result.
+  await page.locator('.result-tab[data-engine="ppocr-v5-en"]').click();
+  await page.locator('.row details').first().evaluate(el=>{el.open=true;});
+  assert.match(await page.locator('.row-message').first().innerText(),/僅辨識數字/);
+  await page.screenshot({path:`test-report/${name}-digits-only.png`,fullPage:true});
   await page.locator('.result-tab[data-engine="cnn"]').click();assert.deepEqual(await readRows(page),['0900','0910','1002','1004']);
   await page.locator('.row-edit input').first().fill('0905');await page.locator('#confirm-valid').click();await page.waitForFunction(()=>document.querySelector('#save-status').textContent.includes('已保存'));
   await page.locator('.result-tab[data-engine="ppocr-v5-en"]').click();assert.deepEqual(await readRows(page),raw['ppocr-v5-en']);
@@ -31,7 +43,10 @@ for(const[name,engine,options]of[['chromium',chromium,{viewport:{width:390,heigh
   await page.locator('#csv').click();assert.match(await page.locator('#output').inputValue(),/^09:05/);
   await page.screenshot({path:`test-report/${name}-multi-review.png`,fullPage:true});
   await page.reload();await page.locator('[data-tab=review]').click();await page.waitForFunction(()=>document.querySelectorAll('.result-tab').length===4);
+  assert.match(await page.locator('#digits-only-note').innerText(),/0–9/);
   assert.equal((await readRows(page))[0],'0905');await page.locator('.result-tab[data-engine="ppocr-v5-en"]').click();assert.equal((await readRows(page))[0],'0910');
+  const reloaded=await page.evaluate(async()=>await(await import('./src/store.js')).getState('draft'));
+  for(const run of reloaded.modelResults.filter(run=>run.engine!=='cnn')){const before=numericDraft.modelResults.find(item=>item.engine===run.engine);assert.deepEqual(run.rows.map(row=>({raw:row.raw,transcript:row.transcript,numericOnly:row.numericOnly})),before.rows.map(row=>({raw:row.raw,transcript:row.transcript,numericOnly:row.numericOnly})));}
   await page.locator('[data-tab=settings]').click();await page.locator('#show-model-storage').click();await page.waitForFunction(()=>document.querySelector('#model-storage').children.length>0||document.querySelector('#notice').classList.contains('error'));
   console.log('CACHE_DIAGNOSTIC',name,JSON.stringify(await page.evaluate(async()=>({notice:document.querySelector('#notice').textContent,storage:document.querySelector('#model-storage').textContent,keys:await caches.keys()}))));
   assert.equal((await page.locator('#model-storage').innerText()).match(/已下載保存/g)?.length,3,'All three selected weight sets persist after their Workers terminate');
@@ -39,7 +54,7 @@ for(const[name,engine,options]of[['chromium',chromium,{viewport:{width:390,heigh
   assert.equal(await page.evaluate(()=>localStorage.getItem('strforge.state.v2')),'KEEP');
   const bad=requests.filter(r=>!r.url.startsWith(base)&&!r.url.startsWith('blob:http://127.0.0.1:4173/')&&!r.url.startsWith('data:image/'));
   assert.deepEqual(bad,[]);assert.equal(requests.some(r=>r.method!=='GET'||r.post),false,'No image upload or external inference');assert.deepEqual(errors,[]);
-  reports.push({browser:name,engines:raw,independentEdits:true,draftReload:true,activeExport:true,noUpload:true,errors});
+  reports.push({browser:name,engines:raw,digitsOnly:true,originalTranscripts:numericDraft.modelResults.map(run=>({engine:run.engine,rows:run.rows.map(row=>({raw:row.raw,transcript:row.transcript}))})),independentEdits:true,draftReload:true,activeExport:true,noUpload:true,errors});
   // Window-owned model cache must be visible after reopen and avoid weight re-download.
   await page.locator('#model-storage .model-storage-line').last().locator('[data-model-action=clear]').click();
   await page.waitForFunction(()=>document.querySelector('#model-storage').textContent.includes('尚未完整下載'));

@@ -44,6 +44,12 @@ CNN僅0–9：55,000訓練、5,000驗證、10,000未用於選模的測試圖，s
 
 本次亦改局部對比切列與墨跡範圍切字，指定列數不再強制等分。單一張照片即使得到26列仍不代表26筆正確，需實拍核對。
 
+## 數字限定解碼
+
+三個 PP-OCR Worker 呼叫 `decodeCTC(..., {digitsOnly:true})`，只從原字典的 ASCII 0–9 與第0類blank選字；不修改模型輸出維度或權重。CNN本來只有0–9。保留同一類相鄰合併、blank隔開可重複的CTC規則；不把O/I或標點替換成數字，不強制四位或合法HHMM。
+
+`raw`與初始`value`為數字結果；原完整字典greedy結果保留在既有`transcript`，新增可選`numericOnly`標記。只有展開詳情才顯示限定前文字，DOM使用textContent。分數不重新正規化，非數字候選被排除時提示核對；全部新結果仍未確認。字元限制不能修好混列或保證準確率。schema與匯出格式不變，舊草稿不重算或靜默改字。
+
 ## 模型 ZIP 安裝
 
 設定頁固定連結下載本站 `downloads/Oc-Models.zip` 或 `downloads/Oc-PP-OCRv5-General.zip`，由瀏覽器保存到裝置檔案。使用者回到原 Oc 入口用 file input 選取 ZIP；下載不代表已匯入。

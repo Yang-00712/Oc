@@ -73,7 +73,7 @@ try{
    await page.locator('#recognize').click();await page.waitForSelector('#review:not([hidden])',{timeout:240000});
    assert.equal(await page.locator('.result-tab:disabled').count(),0);
    assert.equal(await page.locator('.result-tab').count(),3);
-   const raw={};for(const id of ['ppocr-v5-en','ppocr-v5-ch','ppocr-v4-en']){await page.locator(`.result-tab[data-engine="${id}"]`).click();raw[id]=await page.locator('.row-edit input').evaluateAll(v=>v.map(x=>x.value));assert.equal(raw[id].length,4);assert.ok(raw[id].some(Boolean));}
+   const raw={};for(const id of ['ppocr-v5-en','ppocr-v5-ch','ppocr-v4-en']){await page.locator(`.result-tab[data-engine="${id}"]`).click();raw[id]=await page.locator('.row-edit input').evaluateAll(v=>v.map(x=>x.value));assert.equal(raw[id].length,4);assert.ok(raw[id].some(Boolean));assert.ok(raw[id].every(value=>/^[0-9]*$/.test(value)),'Installed unchanged models decode numbers only');}
    assert.equal(requests.slice(beforeInference).some(r=>/\/models\/|\/vendor\//.test(r.url)),false,'Real inference reads all weights, configs, runtime mjs and wasm from local storage');
    assert.equal(await page.evaluate(()=>localStorage.getItem('strforge.state.v2')),'KEEP-STRFORGE');
    for(let i=0;i<4;i++)await page.locator('.row-edit input').nth(i).fill(['0900','0910','1002','1004'][i]);await page.locator('#confirm-valid').click();
@@ -100,7 +100,7 @@ try{
    await page.locator('[data-tab=review]').click();assert.equal(await page.locator('.row-edit input').first().inputValue(),'0900');
    assert.deepEqual(errors,[]);assert.equal(requests.some(r=>r.method!=='GET'||r.post),false);
    const external=requests.filter(r=>!r.url.startsWith(base)&&!r.url.startsWith('blob:http://127.0.0.1:4173/')&&!r.url.startsWith('data:image/'));assert.deepEqual(external,[]);
-   reports.push({browser:name,settingsDownloadLinks:true,downloadedFileImport:true,zipImport:true,modelsAndRuntimeSurviveReload:true,corruptRejected:true,realThreeModelInferenceWithoutAssetNetwork:raw,resultExport:true,downloadFailureNamesFile:true,downloadBeyondFourMinutes:true,cancelPreservesDraft:true,noUpload:true,errors});
+   reports.push({browser:name,digitsOnly:true,settingsDownloadLinks:true,downloadedFileImport:true,zipImport:true,modelsAndRuntimeSurviveReload:true,corruptRejected:true,realThreeModelInferenceWithoutAssetNetwork:raw,resultExport:true,downloadFailureNamesFile:true,downloadBeyondFourMinutes:true,cancelPreservesDraft:true,noUpload:true,errors});
   }catch(error){console.error('INSTALL_FAILURE',name,String(error),await page.locator('#notice').innerText(),errors);await page.screenshot({path:`test-report/${name}-install-failed.png`,fullPage:true}).catch(()=>{});throw error;}
   finally{await context.close();await browser.close();}
  }
