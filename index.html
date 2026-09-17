@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#152523">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Oc 時間掃描">
+<meta name="description" content="框選手寫時間欄，在手機本機辨識、核對與匯出。照片不上傳。">
+<meta property="og:title" content="Oc · 時間掃描">
+<meta property="og:description" content="拍照 → 框選 → 核對時間；在裝置本機處理。">
+<meta property="og:image" content="https://yang-00712.github.io/Oc/assets/icon-512.png">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="icon" href="assets/icon-192.png" type="image/png">
+<link rel="stylesheet" href="app.css">
+<title>Oc · 時間掃描</title>
+</head>
+<body>
+<header class="brand"><img src="assets/icon-192.png" width="46" height="46" alt="戴粉紅蝴蝶結的羽球貓咪"><div><span class="eyebrow">PHOTO TO TIME</span><h1>Oc <span>時間掃描</span></h1></div><span class="local-badge">本機處理</span></header>
+<nav class="tabs" aria-label="主要功能"><button type="button" data-tab="scan" aria-current="page">① 掃描</button><button type="button" data-tab="review">② 校正</button><button type="button" data-tab="settings">③ 設定</button></nav>
+<main>
+<div id="notice" role="status" aria-live="polite">照片不上傳。辨識結果須人工核對；潦草、連筆與表格線可能誤判。</div>
+<section id="scan" class="page">
+<div class="intro"><span class="eyebrow">只取需要的那一欄</span><h2>把紙上的時間，<br>變成可以貼上的文字。</h2><p>拍正紙張，再用手指框住由上往下的 4 位數時間。</p></div>
+<div class="card">
+<div class="actions"><label class="button primary" for="camera">拍照<input id="camera" type="file" accept="image/*" capture="environment"></label><label class="button" for="photo">選照片<input id="photo" type="file" accept="image/*"></label><button id="demo" type="button" class="quiet">試用示例</button></div>
+<div id="photo-empty" class="empty"><span class="frame-mark">⌗</span><strong>0900 → 09:00</strong><p>只讀取你框選的範圍<br>不改動 StrForge，不保存整張原照</p></div>
+<div id="photo-editor" hidden>
+<p class="small">在照片上拖曳框選。此區域用來畫框；捲動頁面請拖曳框外。</p>
+<canvas id="photo-canvas" aria-label="拖曳框選時間欄"></canvas>
+<div class="field"><label for="angle">傾斜微調 <output id="angle-value">0°</output></label><input type="range" id="angle" min="-15" max="15" value="0" step="1"></div>
+<div class="actions"><button type="button" id="full-frame">選取全圖</button><button type="button" id="save-template">記住此範圍</button><button type="button" id="use-template">套用範圍</button></div>
+<p class="small">記住的是比例位置，不是自動找紙角；每張照片仍需確認框位。沒有自動透視校正。</p>
+<details><summary>框選座標（百分比）</summary><div class="four-fields"><label>左<input id="roi-x" type="number" min="0" max="99" value="0"></label><label>上<input id="roi-y" type="number" min="0" max="99" value="0"></label><label>寬<input id="roi-w" type="number" min="1" max="100" value="100"></label><label>高<input id="roi-h" type="number" min="1" max="100" value="100"></label></div></details>
+</div>
+</div>
+<div class="card"><div class="two-fields"><label>列數<input id="row-count" type="number" min="1" max="100" inputmode="numeric" placeholder="留空＝自動"></label><label>數字切割<select id="digit-mode"><option value="auto">自動辨識間距</option><option value="equal">每列等寬切四格</option></select></label></div><p class="small">自動漏列時，填實際列數並框齊最上、最下列邊界。等寬模式適用四個字對齊的紙張。</p><div class="actions"><button id="recognize" class="primary wide" type="button" disabled>辨識時間 →</button><button id="cancel" type="button" hidden>取消</button></div><p id="progress" class="small" aria-live="polite">模型只在按下辨識時載入。</p></div>
+</section>
+<section id="review" class="page" hidden>
+<div class="section-head"><div><span class="eyebrow">看一眼，再帶走</span><h2>校正結果</h2></div><button id="add-row" type="button">＋ 一列</button></div>
+<p class="small">對照每列原圖，輸入 0900 或 09:00，再按「確認」。模型分數不是正確率，合法時間也可能辨識錯。</p>
+<div class="review-tools"><label class="check"><input id="collect" type="checkbox"> 收集我確認的字跡（只存本機）</label><button id="confirm-valid" type="button" class="quiet">我已核對，確認全部有效列</button></div>
+<p id="review-count" class="small"></p><div id="rows"></div><p id="save-status" class="small" role="status"></p>
+<div class="card export-card"><h3>匯出時間</h3><div class="actions"><button id="copy" class="primary" type="button">複製</button><button id="txt" type="button">TXT</button><button id="csv" type="button">CSV</button></div><textarea id="output" rows="5" readonly aria-label="匯出內容，剪貼簿失敗時可手動複製" placeholder="確認後會顯示每列 HH:MM"></textarea><p class="small">不會自動修改時間順序、不會猜補、不會匯出未確認列。</p></div>
+</section>
+<section id="settings" class="page" hidden>
+<span class="eyebrow">清楚知道資料在哪裡</span><h2>設定與教材</h2>
+<div class="card"><h3>這台裝置的 Oc 資料</h3><p id="storage-status">讀取中…</p><p class="small">這是 Oc 保存內容的估算大小，不是 RAM，也不含其他網站資料。</p><div class="actions"><button id="export-training" type="button" class="primary">匯出教材 ZIP</button><button id="clear-training" type="button">清除教材</button><button id="clear-draft" type="button">清除校正草稿</button></div></div>
+<div class="card"><h3>模型與能力範圍</h3><p>使用小型 0–9 手寫數字 CNN，辨識在瀏覽器的 Worker 執行；不下載 .NET 或大型 OCR runtime。</p><p>適用淺色紙張、深色筆跡、每列四個分開的數字。連筆、重疊、潦草或透視嚴重時，請在校正頁修改。</p><p>目前模型不是用你的字訓練。確認字跡只累積教材，不會自動訓練或改變模型。</p><p class="small">教材包含時間列縮圖與人工答案。再訓練前需校對切字；本版不把整列答案擅自當成每格標籤。教材上限 2,000 列。</p></div>
+<div class="card"><h3>啟動與資料保護</h3><p>沒有 Service Worker 或離線保證。重新載入不清資料；相片不離開裝置。瀏覽器清除網站資料仍可能移除草稿與教材，請定期匯出。</p><p class="small">Oc 使用獨立的 IndexedDB，不讀取或清除 StrForge 的保存資料。</p></div>
+</section>
+</main><footer>Oc · 辨識協助，人工確認。</footer>
+<noscript>需要啟用 JavaScript 才能在本機辨識照片。</noscript>
+<script type="module" src="src/app.js"></script>
+</body></html>

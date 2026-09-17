@@ -1,0 +1,1 @@
+{"id":"./","name":"Oc 時間掃描","short_name":"Oc","description":"拍照框選時間，在本機辨識、校正與匯出。","start_url":"./","scope":"./","display":"standalone","background_color":"#0e1817","theme_color":"#152523","lang":"zh-Hant","icons":[{"src":"assets/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},{"src":"assets/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"}]}

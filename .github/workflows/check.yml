@@ -1,0 +1,37 @@
+name: Oc browser and model checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: oc-check-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - run: node tools/stamp.mjs --check
+      - run: npm test
+      - name: Install isolated browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/oc-browser" --ignore-scripts --no-audit --no-fund playwright@1.63.0
+          node "$RUNNER_TEMP/oc-browser/node_modules/playwright/cli.js" install --with-deps chromium webkit > "$RUNNER_TEMP/browser-install.log" 2>&1 || { tail -60 "$RUNNER_TEMP/browser-install.log"; exit 1; }
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/oc-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - run: node tools/browser-check.mjs
+      - run: python tools/package.py
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: oc-check-report
+          path: test-report/
+          retention-days: 7
