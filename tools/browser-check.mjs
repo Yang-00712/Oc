@@ -7,6 +7,15 @@ const server=spawn(process.execPath,['tools/serve.mjs'],{stdio:['ignore','pipe',
 await new Promise((resolve,reject)=>{server.stdout.once('data',resolve);server.once('error',reject);});
 await mkdir('test-report',{recursive:true});
 const results=[];
+function localRequest(address){
+ const url=new URL(address);
+ if(url.protocol==='blob:') return url.origin==='http://127.0.0.1:4173';
+ if(url.protocol==='data:') return /^data:image\/png;base64,/.test(address);
+ return url.protocol==='http:'&&url.origin==='http://127.0.0.1:4173';
+}
+assert.equal(localRequest('https://example.com/upload'),false);
+assert.equal(localRequest('blob:https://example.com/123'),false);
+assert.equal(localRequest('blob:http://127.0.0.1:4173/123'),true);
 try{
 for(const [name,engine,options] of [['chromium',chromium,{viewport:{width:390,height:844}}],['webkit',webkit,{...devices['iPhone 14'],locale:'zh-TW'}]]){
  const browser=await engine.launch();
@@ -36,17 +45,40 @@ for(const [name,engine,options] of [['chromium',chromium,{viewport:{width:390,he
   assert.equal(await page.evaluate(()=>localStorage.getItem('strforge.state.v2')),'KEEP-STRFORGE');
   await page.screenshot({path:`test-report/${name}-settings.png`,fullPage:true});
   await page.locator('[data-tab=review]').click();await page.locator('.row-edit input').first().fill('0968');await page.locator('.confirm-row').first().click();assert.match(await page.locator('#notice').innerText(),/分鐘/);
-  // A failed model read must leave the existing corrected draft untouched.
   await page.locator('[data-tab=scan]').click();await page.locator('#demo').click();await page.waitForSelector('#photo-editor:not([hidden])');
   await context.route('**/models/time-digit.json*',r=>r.fulfill({status:200,contentType:'application/json',body:'{}'}));
   await page.locator('#recognize').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('完整性'));
   await page.locator('[data-tab=review]').click();assert.equal(await page.locator('.row-edit input').first().inputValue(),'0968');
   await context.unroute('**/models/time-digit.json*');
-  assert.ok(requests.every(url=>url.startsWith('http://127.0.0.1:4173/')),'No photo/API requests leave the site');
+  // A local file input and pointer-selected top half must recognize only the first two rows.
+  await page.locator('[data-tab=scan]').click();
+  await page.locator('#photo').setInputFiles('assets/demo-times.png');
+  await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('已載入照片'));
+  await page.locator('#photo-canvas').scrollIntoViewIfNeeded();
+  const rect=await page.locator('#photo-canvas').boundingBox();
+  await page.mouse.move(rect.x+1,rect.y+1);await page.mouse.down();
+  await page.mouse.move(rect.x+rect.width-1,rect.y+rect.height*.5,{steps:12});await page.mouse.up();
+  await page.locator('#save-template').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('已記住'));
+  await page.locator('#full-frame').click();await page.locator('#use-template').click();
+  await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('已套用'));
+  await page.screenshot({path:`test-report/${name}-crop.png`,fullPage:true});
+  await page.locator('#recognize').click();await page.waitForSelector('#review:not([hidden])');
+  assert.deepEqual(await page.locator('.row-edit input').evaluateAll(items=>items.map(item=>item.value)),['0900','0910']);
+  // Deliberately hold a model response, cancel, then release it; late results cannot replace rows.
+  await page.locator('[data-tab=scan]').click();
+  let held,received;const intercepted=new Promise(resolve=>received=resolve);
+  await context.route('**/models/time-digit.json*',route=>{held=route;received();});
+  await page.locator('#recognize').click();await intercepted;await page.locator('#cancel').click();
+  await held.abort().catch(()=>{});await context.unroute('**/models/time-digit.json*');
+  await page.locator('[data-tab=review]').click();
+  assert.deepEqual(await page.locator('.row-edit input').evaluateAll(items=>items.map(item=>item.value)),['0900','0910']);
+  // blob:/data: image previews and ZIP downloads are local objects, not network uploads.
+  const forbidden=requests.filter(address=>!localRequest(address));
+  await writeFile(`test-report/${name}-request-origins.json`,JSON.stringify({protocols:[...new Set(requests.map(u=>new URL(u).protocol))],forbidden},null,2));
+  assert.deepEqual(forbidden,[],'No photo/API requests leave the site');
   assert.deepEqual(errors,[]);
-  results.push({browser:name,demo:values,correction:true,draftReload:true,trainingExport:true,clearIsolated:true,invalidTimeBlocked:true,modelFailurePreservesDraft:true,errors});
+  results.push({browser:name,demo:values,correction:true,draftReload:true,trainingExport:true,clearIsolated:true,invalidTimeBlocked:true,modelFailurePreservesDraft:true,fileInput:true,pointerCrop:true,template:true,cancel:true,errors});
   await context.close();
-  // 320px layout and unavailable IndexedDB must still leave the manual path working.
   const narrow=await browser.newContext({...options,viewport:{width:320,height:740}}),np=await narrow.newPage();
   await np.addInitScript(()=>{Object.defineProperty(window,'indexedDB',{value:{open(){throw new Error('Injected storage block');}}});});
   await np.goto('http://127.0.0.1:4173/Oc/');await np.waitForFunction(()=>document.querySelector('#notice').textContent.includes('無法還原'));

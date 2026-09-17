@@ -2,7 +2,7 @@ name: Prepare and verify OCR assets
 on:
   push:
     branches: [build/ocr]
-    paths: ['.github/workflows/prepare-assets.yml', 'tools/prepare-assets.py']
+    paths: ['.github/workflows/prepare-assets.yml', 'tools/prepare-assets.py', 'tools/browser-check.mjs']
 permissions:
   contents: write
   actions: read

@@ -2,26 +2,28 @@
 
 ## 網站圖示
 
-使用者在本對話提供的羽球貓咪照片。採正方形裁切與縮放，沒有宣稱去背景或創作全新圖像。`assets/icon-source.jpg` 是製作用縮圖；180/192/512px PNG由這份縮圖產生。原始全尺寸照片未提交。使用者提供圖片用於本網站，不代表已取得向第三方重新授權的權利。
+使用者提供的羽球貓咪照片，採正方形裁切與縮放，沒有宣稱去背景。assets/icon-source.jpg是製作縮圖，180/192/512px PNG由此產生；原始全照未提交。圖片授權用於本網站，不代表可代使用者向第三方重新授權。
 
-## 手寫數字與模型
+## MNIST資料
 
-MNIST：Yann LeCun、Corinna Cortes、Christopher J. C. Burges 的手寫數字資料集。資料入口採 TensorFlow/Keras MNIST鏡像：
-https://storage.googleapis.com/tensorflow/tf-keras-datasets/mnist.npz
+資料作者與權利人：Yann LeCun、Corinna Cortes；資料說明共同作者包括 Christopher J. C. Burges。MNIST是原NIST資料的衍生資料集。Keras官方載入程式明列資料使用 **Creative Commons Attribution-ShareAlike 3.0**：
+https://github.com/keras-team/keras/blob/v2.12.0/keras/datasets/mnist.py
+https://creativecommons.org/licenses/by-sa/3.0/
 
-官方載入/資料說明：
-https://www.tensorflow.org/api_docs/python/tf/keras/datasets/mnist/load_data
-
-原資料集首頁：
+原資料集：
 https://yann.lecun.com/exdb/mnist/
 
-`assets/demo-times.png` 是保留測試集中的數字重新縮放、反相並排列的示例；`tests/golden.json` 含32個測試樣本及模型logits，僅供驗證。這些不是使用者照片，也不是人工輸入答案冒充辨識。資料集權利沿用來源的適用條款，不將素材與資料宣稱為本專案原創或任意重新授權。
+下載來源為TensorFlow/Keras鏡像：
+https://storage.googleapis.com/tensorflow/tf-keras-datasets/mnist.npz
+https://www.tensorflow.org/api_docs/python/tf/keras/datasets/mnist/load_data
 
-模型由 `tools/train-model.py` 在本repository的隔離Actions runner訓練；來源檔SHA256、seed、資料分割、epoch及精度記在 `models/training-metrics.json`。不使用未經辨識的網路模型，也不含使用者私人訓練資料。
+`assets/demo-times.png`是保留測試集數字經縮放、反相、重新排列的衍生示例；`tests/golden.json`的pixels是32個測試樣本的JSON表示。這些資料部分沿用CC BY-SA 3.0，保留作者、來源與此修改說明，不主張原創。此授權不擴張到使用者照片。
 
-## 參考文件
+模型由tools/train-model.py在本repository隔離Actions runner訓練；來源SHA256、seed、分割、epoch與精度見models/training-metrics.json。模型權重不含使用者私人教材；示例與測試不能證明其對使用者筆跡的精度。
 
-GitHub Pages main / (root) 設定：
+## 參考
+
+GitHub Pages main/(root)：
 https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site
 
-本專案沿用原StrForge的資料隔離、匯出不自動清除、真實執行才回報通過等已核對要求。並未複製其C#、WASM、字型或原始使用者資料。
+參考原StrForge已核對的資料隔離、匯出不自動清除、真實測試與實機區分要求，沒有複製C#、WASM、字型或原始使用者資料。
