@@ -1,7 +1,10 @@
 // Actual model import + actual inference with all model/runtime HTTP blocked.
 // No user photograph or private training data is used or uploaded by this test.
 import assert from 'node:assert/strict';
-import {mkdir,writeFile,readFile} from 'node:fs/promises';
+import {mkdir,writeFile,readFile,mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 const {chromium,webkit,devices}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE).href);
@@ -11,6 +14,11 @@ const base='http://127.0.0.1:4173/Oc/',reports=[];
 await mkdir('test-report',{recursive:true});
 const waitIdle=page=>page.waitForFunction(()=>document.querySelector('#cancel-install').hidden,{},{timeout:90000});
 const allPack='test-report/model-packs/Oc-Models.zip';
+const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
+const downloadPacks=[['download-models-all','Oc-Models.zip'],['download-models-general','Oc-PP-OCRv5-General.zip']];
+// Published download files must be byte-identical to the trusted deterministic
+// build, not HTML error pages, missing files, or a different bundle revision.
+for(const [,name]of downloadPacks)assert.equal(digest(await readFile('downloads/'+name)),digest(await readFile('test-report/model-packs/'+name)),name+' published bundle differs');
 // Flip a runtime source byte without changing ZIP metadata: integrity must reject
 // it BEFORE writing any previously working model/runtime file.
 const corrupt=Buffer.from(await readFile(allPack));
@@ -28,11 +36,25 @@ try{
    await page.locator('[data-tab=review]').click();await page.locator('#add-row').click();await page.locator('.row-edit input').fill('0910');await page.locator('#confirm-valid').click();
    await page.waitForFunction(()=>document.querySelector('#save-status').textContent.includes('已保存'));
    await page.locator('[data-tab=settings]').click();
+   // Exercise the actual settings download links in both engines, then import
+   // the file the browser saved. Nothing navigates to a new application page.
+   const scratch=await mkdtemp(join(tmpdir(),'oc-pack-download-'));
+   const devicePack=join(scratch,'Oc-Models.zip');
+   try{
+    for(const [id,name]of downloadPacks){
+     const link=page.locator('#'+id);assert.equal(await link.getAttribute('download'),name);
+     const pending=page.waitForEvent('download');await link.click();const download=await pending;
+     assert.equal(download.suggestedFilename(),name);const saved=join(scratch,name);await download.saveAs(saved);
+     assert.equal(digest(await readFile(saved)),digest(await readFile('downloads/'+name)));
+    }
+    assert.equal(page.url(),base,'Downloading must leave the Oc document open');
+   }catch(error){await rm(scratch,{recursive:true,force:true});throw error;}
    // Both foreign and same-origin model/runtime network failure are irrelevant
    // when importing the exact public ZIP from the device's File input.
    await context.route('**/models/**',r=>r.abort('failed'));await context.route('**/vendor/**',r=>r.abort('failed'));
    const beforeImport=requests.length;
-   await page.locator('#model-package').setInputFiles(allPack);await waitIdle(page);
+   await page.locator('#model-package').setInputFiles(devicePack);await waitIdle(page);
+   await rm(scratch,{recursive:true,force:true});
    assert.match(await page.locator('#install-status').innerText(),/已匯入 3 個模型/);
    assert.equal(await page.locator('[data-model-action=install]').count(),3);
    assert.equal((await page.locator('#model-storage').innerText()).match(/可辨識/g)?.length,3);
@@ -78,7 +100,7 @@ try{
    await page.locator('[data-tab=review]').click();assert.equal(await page.locator('.row-edit input').first().inputValue(),'0900');
    assert.deepEqual(errors,[]);assert.equal(requests.some(r=>r.method!=='GET'||r.post),false);
    const external=requests.filter(r=>!r.url.startsWith(base)&&!r.url.startsWith('blob:http://127.0.0.1:4173/')&&!r.url.startsWith('data:image/'));assert.deepEqual(external,[]);
-   reports.push({browser:name,zipImport:true,modelsAndRuntimeSurviveReload:true,corruptRejected:true,realThreeModelInferenceWithoutAssetNetwork:raw,resultExport:true,downloadFailureNamesFile:true,downloadBeyondFourMinutes:true,cancelPreservesDraft:true,noUpload:true,errors});
+   reports.push({browser:name,settingsDownloadLinks:true,downloadedFileImport:true,zipImport:true,modelsAndRuntimeSurviveReload:true,corruptRejected:true,realThreeModelInferenceWithoutAssetNetwork:raw,resultExport:true,downloadFailureNamesFile:true,downloadBeyondFourMinutes:true,cancelPreservesDraft:true,noUpload:true,errors});
   }catch(error){console.error('INSTALL_FAILURE',name,String(error),await page.locator('#notice').innerText(),errors);await page.screenshot({path:`test-report/${name}-install-failed.png`,fullPage:true}).catch(()=>{});throw error;}
   finally{await context.close();await browser.close();}
  }

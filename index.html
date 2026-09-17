@@ -50,7 +50,14 @@
 </section>
 <section id="settings" class="page" hidden>
 <span class="eyebrow">清楚知道資料在哪裡</span><h2>設定</h2>
-<div class="card"><h3>模型安裝與容量</h3><p class="small">下載失敗可把提供的 Oc 模型 ZIP 存到手機「檔案」，不用解壓，再於這個主畫面入口匯入。不是教材 ZIP，也不是 Oc 原始碼 ZIP。</p><div class="actions"><label class="button primary" for="model-package">匯入模型 ZIP<input id="model-package" type="file" accept=".zip,application/zip"></label><button id="cancel-install" type="button" hidden>取消模型準備</button></div><p id="install-status" class="small" role="status" aria-live="polite">只匯入公開模型與共用引擎；不讀寫照片或草稿。</p><button id="show-model-storage" type="button">查看模型下載狀態</button><div id="model-storage"></div><p class="small">移除模型只移除 Oc 模型權重快取，不清除草稿、教材或 StrForge。權重與共用引擎都存好才算可辨識；不代表整個網站可離線。</p></div>
+<div class="card"><h3>模型安裝與容量</h3>
+<h4>① 下載到手機「檔案」</h4>
+<p class="small">已下載 Oc-Models.zip 或通用模型包，直接做第 ② 步，不用重新下載。兩包擇一；完整包已包含通用模型。</p>
+<div class="actions"><a id="download-models-all" class="button" href="downloads/Oc-Models.zip" download="Oc-Models.zip">下載全部模型 ZIP（約 44 MB）</a><a id="download-models-general" class="button" href="downloads/Oc-PP-OCRv5-General.zip" download="Oc-PP-OCRv5-General.zip">只下載通用模型 ZIP（約 28 MB）</a></div>
+<p class="small">存到「檔案 → 下載項目」或自己選的位置。這一步只是下載檔案，還沒有安裝到 Oc；不用解壓。若入口沒有顯示下載，長按連結，以 Safari 開啟並保存。</p>
+<h4>② 從檔案匯入到這個 Oc</h4>
+<p class="small">按下方按鈕，選剛才的 ZIP。請從平常使用的 Oc 主畫面圖示進來匯入；不是「匯出教材 ZIP」。模型與共用引擎都完整保存後，回掃描勾選模型，再辨識。</p>
+<div class="actions"><label class="button primary" for="model-package">從檔案匯入模型 ZIP<input id="model-package" type="file" accept=".zip,application/zip"></label><button id="cancel-install" type="button" hidden>取消模型準備</button></div><p id="install-status" class="small" role="status" aria-live="polite">只匯入公開模型與共用引擎；不讀寫照片或草稿。</p><button id="show-model-storage" type="button">查看模型下載狀態</button><div id="model-storage"></div><p class="small">移除模型只移除 Oc 模型權重快取，不清除草稿、教材或 StrForge。權重與共用引擎都存好才算可辨識；不代表整個網站可離線。</p></div>
 <div class="card"><h3>這台裝置的 Oc 資料</h3><p id="storage-status">讀取中…</p><p class="small">這是 Oc 保存內容的估算大小，不是 RAM，也不含其他網站資料。</p><div class="actions"><button id="export-training" type="button" class="primary">匯出教材 ZIP</button><button id="clear-training" type="button">清除教材</button><button id="clear-draft" type="button">清除校正草稿</button></div></div>
 <div class="card"><h3>模型與能力範圍</h3><p>提供四個獨立模型：Oc CNN、PP-OCRv5 英文／數字、PP-OCRv5 通用、PP-OCRv4 英文／數字。全部在瀏覽器 Worker 執行；不使用雲端 OCR、不需要訓練或安裝 .NET。</p><p>CNN 適用分開的數字；PP-OCR 直接辨識整列。各自保存初判與校正結果，不自動投票或猜補。連筆、重疊、潦草或透視嚴重時，請在校正頁修改。</p><p>目前模型不是用你的字訓練。確認字跡只累積教材，不會自動訓練或改變模型。</p><p class="small">教材包含時間列縮圖與人工答案。再訓練前需校對切字；本版不把整列答案擅自當成每格標籤。教材上限 2,000 列。</p></div>
 <div class="card"><h3>啟動與資料保護</h3><p>沒有 Service Worker 或離線保證。重新載入不清資料；相片不離開裝置。瀏覽器清除網站資料仍可能移除草稿與教材，請定期匯出。</p><p class="small">Oc 使用獨立的 IndexedDB，不讀取或清除 StrForge 的保存資料。</p></div>
