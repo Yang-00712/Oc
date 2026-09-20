@@ -7,6 +7,14 @@ const row=(value='0900')=>({id:'row',value,raw:value,confirmed:false,thumbnail:'
 test('only known, nonduplicate model choices',()=>{assert.equal(selectedEngines(['cnn','ppocr-v5-en','ppocr-v5-ch']).length,3);for(const v of [[],['bad'],['cnn','cnn'],null])assert.throws(()=>selectedEngines(v));});
 test('whitespace may format time, but no digits may be guessed or removed',()=>{assert.equal(normalizedTranscript('0 9 0 0'),'0900');assert.equal(normalizedTranscript('O900'),'O900');assert.equal(normalizedTranscript('090012'),'090012');assert.equal(normalizedTranscript('09 10\n10 02'),'09 10\n10 02');});
 test('legacy schema 1 draft is retained',()=>{const data=restoreDraft({schema:1,rows:[row()]});assert.equal(data.activeEngine,'legacy');assert.equal(data.rows[0].value,'0900');});
+test('30 form slots survive draft reload and cannot silently lose their order',()=>{
+ const rows=Array.from({length:30},(_,i)=>({...row(i===11?'':'0900'),id:String(i),formSlot:i+1}));
+ const runs=[{engine:'ppocr-v5-ch',status:'ready',elapsedMs:1,rows}];
+ const draft=snapshotDraft(rows,runs,'ppocr-v5-ch');
+ assert.equal(restoreDraft(draft).rows[11].formSlot,12);
+ assert.equal(restoreDraft(draft).rows[11].value,'');
+ assert.throws(()=>restoreDraft({...draft,rows:rows.slice(1)}),/草稿格式/);
+});
 test('per-model changes do not overwrite another model or its raw value',()=>{
  const a=[row()],b=[row('0910')],runs=[{engine:'cnn',status:'ready',elapsedMs:1,rows:a},{engine:'ppocr-v5-en',status:'ready',elapsedMs:2,rows:b}];
  a[0].value='0905';const draft=snapshotDraft(a,runs,'cnn');a[0].value='0955';const restored=restoreDraft(draft);

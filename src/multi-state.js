@@ -1,5 +1,8 @@
-import { engineById } from './engines.js?build=6ac4ff17052f';
-export function validRows(rows){return Array.isArray(rows)&&rows.length<=100&&rows.every(row=>row&&typeof row.id==='string'&&typeof row.value==='string'&&typeof row.thumbnail==='string'&&typeof row.raw==='string'&&typeof row.reason==='string'&&Array.isArray(row.predictions)&&row.predictions.every(p=>p&&Number.isFinite(p.score)&&Number.isFinite(p.margin)&&Array.isArray(p.candidates)&&p.candidates.every(c=>Number.isInteger(c.digit)&&c.digit>=0&&c.digit<=9)));}
+import { engineById } from './engines.js?build=80814c2a0770';
+export function validRows(rows){
+ if(!Array.isArray(rows)||rows.length>100||!rows.every(row=>row&&typeof row.id==='string'&&typeof row.value==='string'&&typeof row.thumbnail==='string'&&typeof row.raw==='string'&&typeof row.reason==='string'&&Array.isArray(row.predictions)&&row.predictions.every(p=>p&&Number.isFinite(p.score)&&Number.isFinite(p.margin)&&Array.isArray(p.candidates)&&p.candidates.every(c=>Number.isInteger(c.digit)&&c.digit>=0&&c.digit<=9))))return false;
+ return rows.every(row=>row.formSlot===undefined)||(rows.length===30&&rows.every((row,index)=>row.formSlot===index+1));
+}
 export function restoreDraft(draft){
  if(!draft)return {runs:[],activeEngine:null,rows:[]};
  if(draft.schema!==1||!validRows(draft.rows))throw new Error('草稿格式無效或版本較新；不覆蓋未知資料。');

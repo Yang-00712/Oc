@@ -1,12 +1,13 @@
-import { segment } from './segmentation.js?build=6ac4ff17052f';
-import { prepareLine, decodeCTC } from './paddle.js?build=6ac4ff17052f';
-import { normalizedTranscript, engineById } from './engines.js?build=6ac4ff17052f';
+import { segment } from './segmentation.js?build=80814c2a0770';
+import { prepareLine, decodeCTC } from './paddle.js?build=80814c2a0770';
+import { normalizedTranscript, engineById } from './engines.js?build=80814c2a0770';
 self.onmessage=async({data})=>{
  const {id,engine,rgba,width,height,options,assets}=data;let session,stage='準備辨識';const localUrls=[];
  const progress=message=>{stage=message;self.postMessage({id,type:'progress',message});};
  try{
   if(engineById(engine)?.kind!=='line')throw new Error('未知整列模型。');
   if(!assets||assets.config?.id!==engine||!(assets.weights instanceof ArrayBuffer))throw new Error('缺少已驗證的模型權重。');
+  const pieces=segment(rgba,width,height,options);
   // Parent window has already verified and cached the weights. Transfer avoids
   // duplicating their buffer and the cache survives termination of this Worker.
   if(!assets.runtime)throw new Error('缺少已保存的共用引擎。');
@@ -26,7 +27,7 @@ self.onmessage=async({data})=>{
   ort.env.wasm.wasmPaths={mjs:glueUrl,wasm:wasmUrl};
   progress('初始化本機模型…');
   session=await ort.InferenceSession.create(assets.weights,{executionProviders:['wasm'],graphOptimizationLevel:'all'});
-  const pieces=segment(rgba,width,height,options),rows=[];
+  const rows=[];
   for(let i=0;i<pieces.length;i++){
    const piece=pieces[i];
    if(!piece.glyphs.length){rows.push({box:piece.box,raw:'',transcript:'',predictions:[],uncertain:true,reason:piece.reason,modelHash:assets.modelHash});continue;}

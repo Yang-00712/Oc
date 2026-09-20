@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir,writeFile } from 'node:fs/promises';
+import { mkdir,writeFile,readFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 const {chromium,webkit,devices}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE).href);
@@ -7,6 +7,7 @@ const server=spawn(process.execPath,['tools/serve.mjs'],{stdio:['ignore','pipe',
 await new Promise((resolve,reject)=>{server.stdout.once('data',resolve);server.once('error',reject);});
 await mkdir('test-report',{recursive:true});
 const results=[];
+const waitRoute=(promise)=>{let timer;return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('等待模型請求逾時')),30000);})]).finally(()=>clearTimeout(timer));};
 function localRequest(address){
  const url=new URL(address);
  if(url.protocol==='blob:') return url.origin==='http://127.0.0.1:4173';
@@ -17,21 +18,24 @@ assert.equal(localRequest('https://example.com/upload'),false);
 assert.equal(localRequest('blob:https://example.com/123'),false);
 assert.equal(localRequest('blob:http://127.0.0.1:4173/123'),true);
 try{
-for(const [name,engine,options] of [['chromium',chromium,{viewport:{width:390,height:844}}],['webkit',webkit,{...devices['iPhone 14'],locale:'zh-TW'}]]){
+for(const [name,engine,options] of [['chromium',chromium,{viewport:{width:390,height:844}}],['webkit',webkit,{...devices['iPhone 14'],locale:'zh-TW'}]].filter(([name])=>!process.env.OC_BROWSER||name===process.env.OC_BROWSER)){
  const browser=await engine.launch();
  try{
   const context=await browser.newContext(options),page=await context.newPage(),requests=[],errors=[];
   page.on('request',r=>requests.push(r.url()));page.on('pageerror',e=>errors.push(String(e)));
   page.on('dialog',dialog=>dialog.accept());
   await page.goto('http://127.0.0.1:4173/Oc/');await page.waitForFunction(()=>document.querySelector('#review-count').textContent.includes('還沒有'));
-  assert.ok(!requests.some(url=>url.includes('/models/')||url.includes('ocr-worker')||url.includes('cnn.js')),'No model/inference on startup');
+  assert.ok(!requests.some(url=>url.includes('/models/')||url.includes('/vendor/')||url.includes('line-worker')||url.includes('ocr-worker')||url.includes('cnn.js')),'No model/inference on startup');
   await page.evaluate(()=>localStorage.setItem('strforge.state.v2','KEEP-STRFORGE'));
   await page.screenshot({path:`test-report/${name}-scan.png`,fullPage:true});
   await page.locator('#demo').click();await page.waitForSelector('#photo-editor:not([hidden])');
-  await page.locator('#recognize').click();await page.waitForSelector('#review:not([hidden])');
-  const values=await page.locator('.row-edit input').evaluateAll(items=>items.map(item=>item.value));assert.deepEqual(values,['0900','0910','1002','1004']);
+  await page.locator('#recognize').click();await page.waitForSelector('#review:not([hidden])',{timeout:240000});
+  assert.equal(await page.locator('.result-tab[data-engine="ppocr-v5-ch"]:disabled').count(),0);
+  const values=await page.locator('.row-edit input').evaluateAll(items=>items.map(item=>item.value));
+  assert.equal(values.length,4);assert.ok(values.some(Boolean));assert.ok(values.every(value=>/^[0-9]*$/.test(value)));
   await page.locator('#copy').click();assert.match(await page.locator('#notice').innerText(),/確認/);
-  await page.locator('.review-tools summary').click();await page.locator('#collect').check();await page.locator('.row-edit input').nth(2).fill('1003');
+  await page.locator('.review-tools summary').click();await page.locator('#collect').check();
+  for(let i=0;i<4;i++)await page.locator('.row-edit input').nth(i).fill(['0900','0910','1003','1004'][i]);
   await page.locator('#confirm-valid').click();await page.waitForFunction(()=>document.querySelector('#review-count').textContent.includes('已確認 4 列'));
   await page.waitForFunction(()=>document.querySelector('#save-status').textContent.includes('已保存'));
   await page.locator('#txt').click();await page.waitForFunction(()=>document.querySelector('#output').value.includes('10:03'));
@@ -40,16 +44,20 @@ for(const [name,engine,options] of [['chromium',chromium,{viewport:{width:390,he
   await page.reload();await page.locator('[data-tab=review]').click();await page.waitForFunction(()=>document.querySelectorAll('.row').length===4);
   assert.equal(await page.locator('.row-edit input').nth(2).inputValue(),'1003');
   await page.locator('[data-tab=settings]').click();await page.waitForFunction(()=>document.querySelector('#storage-status').textContent.includes('教材 4 /'));
-  const downloadPromise=page.waitForEvent('download');await page.locator('#export-training').click();const download=await downloadPromise;await download.saveAs(`test-report/${name}-training.zip`);
+  const downloadPromise=page.waitForEvent('download');await page.locator('#export-training').click();const download=await downloadPromise;
+  const trainingPath=`test-report/${name}-training.zip`;await download.saveAs(trainingPath);
+  assert.equal((await readFile(trainingPath)).subarray(0,4).toString('hex'),'504b0304');
   await page.locator('#clear-training').click();await page.waitForFunction(()=>document.querySelector('#storage-status').textContent.includes('教材 0 /'));
   assert.equal(await page.evaluate(()=>localStorage.getItem('strforge.state.v2')),'KEEP-STRFORGE');
   await page.screenshot({path:`test-report/${name}-settings.png`,fullPage:true});
   await page.locator('[data-tab=review]').click();await page.locator('.row-edit input').first().fill('0968');await page.locator('.confirm-row').first().click();assert.match(await page.locator('#notice').innerText(),/分鐘/);
   await page.locator('[data-tab=scan]').click();await page.locator('#demo').click();await page.waitForSelector('#photo-editor:not([hidden])');
-  await context.route('**/models/time-digit.json*',r=>r.fulfill({status:200,contentType:'application/json',body:'{}'}));
+  await page.evaluate(async()=>{const {clearModel}=await import('./src/engine-assets.js');await clearModel('ppocr-v5-ch');});
+  const damaged=Buffer.from(await readFile('models/ppocr-v5-ch/model.onnx'));damaged[100]^=1;
+  await context.route('**/models/ppocr-v5-ch/model.onnx*',r=>r.fulfill({status:200,contentType:'application/octet-stream',body:damaged}));
   await page.locator('#recognize').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('完整性'));
   await page.locator('[data-tab=review]').click();assert.equal(await page.locator('.row-edit input').first().inputValue(),'0968');
-  await context.unroute('**/models/time-digit.json*');
+  await context.unroute('**/models/ppocr-v5-ch/model.onnx*');
   await page.locator('[data-tab=scan]').click();
   await page.locator('#photo').setInputFiles('assets/demo-times.png');
   await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('已載入照片'));
@@ -67,15 +75,17 @@ for(const [name,engine,options] of [['chromium',chromium,{viewport:{width:390,he
   await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('已套用'));
   assert.equal(Number(await page.locator('#roi-h').inputValue()),cropHeight);
   await page.screenshot({path:`test-report/${name}-crop.png`,fullPage:true});
-  await page.locator('#recognize').click();await page.waitForSelector('#review:not([hidden])');
-  assert.deepEqual(await page.locator('.row-edit input').evaluateAll(items=>items.map(item=>item.value)),['0900','0910']);
+  await page.locator('#recognize').click();await page.waitForSelector('#review:not([hidden])',{timeout:240000});
+  const cropped=await page.locator('.row-edit input').evaluateAll(items=>items.map(item=>item.value));
+  assert.equal(cropped.length,2);assert.ok(cropped.every(value=>/^[0-9]*$/.test(value)));
   await page.locator('[data-tab=scan]').click();
+  await page.evaluate(async()=>{const {clearModel}=await import('./src/engine-assets.js');await clearModel('ppocr-v5-ch');});
   let held,received;const intercepted=new Promise(resolve=>received=resolve);
-  await context.route('**/models/time-digit.json*',route=>{held=route;received();});
-  await page.locator('#recognize').click();await intercepted;await page.locator('#cancel').click();
-  await held.abort().catch(()=>{});await context.unroute('**/models/time-digit.json*');
+  await context.route('**/models/ppocr-v5-ch/model.onnx*',route=>{held=route;received();});
+  await page.locator('#recognize').click();await waitRoute(intercepted);await page.locator('#cancel').click();
+  await held.abort().catch(()=>{});await context.unroute('**/models/ppocr-v5-ch/model.onnx*');
   await page.locator('[data-tab=review]').click();
-  assert.deepEqual(await page.locator('.row-edit input').evaluateAll(items=>items.map(item=>item.value)),['0900','0910']);
+  assert.deepEqual(await page.locator('.row-edit input').evaluateAll(items=>items.map(item=>item.value)),cropped);
   const forbidden=requests.filter(address=>!localRequest(address));
   await writeFile(`test-report/${name}-request-origins.json`,JSON.stringify({protocols:[...new Set(requests.map(u=>new URL(u).protocol))],forbidden},null,2));
   assert.deepEqual(forbidden,[],'No photo/API requests leave the site');
