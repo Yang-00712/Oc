@@ -68,10 +68,74 @@ export function normalizeDigit(mask,width,box) {
     for(let y=0;y<28;y++) for(let x=0;x<28;x++) if(x+dx>=0&&x+dx<28&&y+dy>=0&&y+dy<28) centered[(y+dy)*28+x+dx]=result[y*28+x];
     return centered;
 }
+function gridBoundaries(rgba,width,height) {
+    // Search the original pixels: thresholdImage deliberately erases long rules.
+    // A three-pixel window tolerates slightly slanted photographed lines.
+    const dark=new Uint8Array(width*height);
+    for(let i=0;i<dark.length;i++) {
+        const p=i*4;
+        dark[i]=(.299*rgba[p]+.587*rgba[p+1]+.114*rgba[p+2])<155?1:0;
+    }
+    const projection=new Uint8Array(height);
+    for(let y=0;y<height;y++) {
+        let covered=0,consecutive=0,longest=0;
+        for(let x=0;x<width;x++) {
+            let ink=0;
+            for(let dy=-2;dy<=2;dy++) if(y+dy>=0&&y+dy<height&&dark[(y+dy)*width+x]) {ink=1;break;}
+            covered+=ink;consecutive=ink?consecutive+1:0;longest=Math.max(longest,consecutive);
+        }
+        projection[y]=covered>=width*.72&&longest>=width*.55?1:0;
+    }
+    const lines=runs(projection,2).map(([start,end])=>Math.floor((start+end-1)/2));
+    if(lines.length!==31) throw new Error(`找不到完整的 30 格邊界（偵測到 ${lines.length} 條橫線）。請框入第一格上緣到最後一格下緣。`);
+    const gaps=lines.slice(1).map((line,i)=>line-lines[i]).sort((a,b)=>a-b);
+    const middle=gaps[15];
+    if(middle<8||gaps[0]<middle*.55||gaps.at(-1)>middle*1.65) throw new Error('30 格的格線間距不可靠；請拍正紙張並重新框選時間欄。');
+    return {lines,dark};
+}
+function segmentGrid30(rgba,width,height,mask,options) {
+    const {lines,dark}=gridBoundaries(rgba,width,height);
+    // Exclude page-long vertical borders from the line model's original image.
+    const columns=new Uint8Array(width);
+    for(let x=0;x<width;x++) {
+        let count=0;for(let y=lines[0];y<=lines[30];y++) count+=dark[y*width+x];
+        if(count>=(lines[30]-lines[0]+1)*.75) columns[x]=1;
+    }
+    let left=0,right=width;
+    const borders=runs(columns,0);
+    if(borders.length>2) throw new Error('時間欄內有多條直邊，請只框選一個時間欄。');
+    if(borders.length===2) {
+        left=borders[0][1];right=borders[1][0];
+    } else if(borders.length===1) {
+        const [start,end]=borders[0];
+        if(start<width*.35) left=end;
+        else if(end>width*.65) right=start;
+        else throw new Error('時間欄中央有直邊，請縮小框選範圍。');
+    }
+    if(right-left<8) throw new Error('時間欄過窄，無法排除格線。');
+    return Array.from({length:30},(_,i)=>{
+        const top=lines[i]+3,bottom=lines[i+1]-3;
+        if(bottom<=top) throw new Error('30 格的格線間距過小。');
+        const box={x:0,y:lines[i],width,height:lines[i+1]-lines[i]};
+        const ink=bounds(mask,width,left,top,right,bottom);
+        if(!ink||ink.ink<3) return {box,glyphs:[],uncertain:true,reason:'此格空白，請人工確認。'};
+        const vertical=new Uint8Array(ink.width);
+        for(let x=0;x<ink.width;x++) for(let y=ink.y;y<ink.y+ink.height;y++) if(mask[y*width+ink.x+x]) {vertical[x]=1;break;}
+        const groups=runs(vertical,0).filter(([s,e])=>bounds(mask,width,ink.x+s,ink.y,ink.x+e,ink.y+ink.height)?.ink>=3);
+        const automatic=options.digitMode!=='equal'&&groups.length===4;
+        const split=automatic?groups.map(([s,e])=>[ink.x+s,ink.x+e]):Array.from({length:4},(_,n)=>[ink.x+Math.floor(n*ink.width/4),ink.x+Math.floor((n+1)*ink.width/4)]);
+        const glyphs=split.map(([start,end])=>normalizeDigit(mask,width,bounds(mask,width,start,top,end,bottom)));
+        const pad=Math.max(1,Math.round(ink.height*.1)),x=Math.max(left,ink.x-pad),y=Math.max(top,ink.y-pad);
+        const lineBox={x,y,width:Math.min(right,ink.x+ink.width+pad)-x,height:Math.min(bottom,ink.y+ink.height+pad)-y};
+        return {box,lineBox,glyphs,uncertain:!automatic,reason:automatic?'':'格內數字未能明確分成四個，請核對。'};
+    });
+}
 export function segment(rgba,width,height,options={}) {
     const {mask}=thresholdImage(rgba,width,height);
     const fixed=Number(options.rowCount||0);
     if(!Number.isInteger(fixed)||fixed<0||fixed>100) throw new Error('列數請填 1–100，或留空自動判斷。');
+    if(options.rowMode==='grid30'&&fixed&&fixed!==30) throw new Error('30 格模式的列數必須是 30。');
+    if(options.rowMode==='grid30') return segmentGrid30(rgba,width,height,mask,options);
     const projection=new Uint8Array(height);
     for(let y=0;y<height;y++) {let count=0;for(let x=0;x<width;x++) count+=mask[y*width+x];projection[y]=count>=2?1:0;}
     let bands=runs(projection,Math.max(2,Math.min(4,Math.round(height/700)))).filter(([s,e])=>e-s>=4);

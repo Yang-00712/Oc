@@ -1,10 +1,11 @@
-import { parseTime, exportTimes, orderWarnings } from './time.js?build=6ac4ff17052f';
-import { decodePhoto, rotatedPhoto, cropPhoto, thumbnail } from './photo.js?build=6ac4ff17052f';
-import { ENGINES, engineById, selectedEngines, comparisonStats } from './engines.js?build=6ac4ff17052f';
-import { restoreDraft, snapshotDraft } from './multi-state.js?build=6ac4ff17052f';
-import * as store from './store.js?build=6ac4ff17052f';
+import { parseTime, exportTimes, orderWarnings } from './time.js?build=ca6156e4fbfb';
+import { decodePhoto, rotatedPhoto, cropPhoto, thumbnail } from './photo.js?build=ca6156e4fbfb';
+import { engineById, selectedEngines, comparisonStats } from './engines.js?build=ca6156e4fbfb';
+import { restoreDraft, snapshotDraft } from './multi-state.js?build=ca6156e4fbfb';
+import * as store from './store.js?build=ca6156e4fbfb';
 
 const $=id=>document.getElementById(id);
+const SCAN_ENGINE='ppocr-v5-ch';
 let installing=false,installJob=0,installController=null;
 let rows=[], source=null, photo=null, roi={x:0,y:0,w:1,h:1},worker=null,job=0,timer=null,saving=Promise.resolve(),storageSafe=true;
 let modelRuns=[],activeEngine=null,batchRunning=false,queueCancelled=false,rejectCurrent=null,assetController=null;
@@ -12,7 +13,7 @@ const node=(tag,text,css)=>{const item=document.createElement(tag);if(text!==und
 function notice(message,error=false){$('notice').textContent=message;$('notice').classList.toggle('error',error);}
 function protect(action){return async event=>{try{await action(event);}catch(error){notice(error.message||String(error),true);}};}
 function tab(name){
-    if(batchRunning&&name!=='scan'){notice('辨識仍在依序執行；可按取消，已完成結果會保留。',true);return;}
+    if(batchRunning&&name!=='scan'){notice('辨識仍在執行；可按取消，原草稿會保留。',true);return;}
     for(const page of document.querySelectorAll('.page'))page.hidden=page.id!==name;
     for(const button of document.querySelectorAll('[data-tab]')){if(button.dataset.tab===name)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');}
     if(name==='settings') void refreshMetrics();
@@ -31,6 +32,7 @@ function save(){
 function updateCounter(){
     syncActive();renderModelTabs();
     const valid=rows.filter(r=>r.confirmed&&parseTime(r.value).valid).length;
+    $('add-row').disabled=rows.some(row=>Number.isInteger(row.formSlot));
     $('review-count').textContent=rows.length?`${rows.length} 列 · 已確認 ${valid} 列 · 待核對 ${rows.length-valid} 列`:'還沒有結果，可先拍照，或新增一列手動輸入。';
 }
 function refreshRow(row,element,index){
@@ -67,10 +69,12 @@ function renderRows(){
         head.append(node('span',String(index+1).padStart(2,'0'),'row-number'));
         if(/^data:image\/png;base64,/.test(row.thumbnail)){const image=node('img');image.src=row.thumbnail;image.alt=`第 ${index+1} 列原圖`;head.append(image);}
         else head.append(node('span','手動輸入','small'));
-        const remove=node('button','刪除','quiet');remove.type='button';remove.setAttribute('aria-label',`刪除第 ${index+1} 列`);remove.onclick=protect(async()=>{
-            if(!confirm(`刪除第 ${index+1} 列？`))return;
-            invalidateSample(row);rows=rows.filter(r=>r.id!==row.id);renderRows();save();
-        });head.append(remove);
+        if(!Number.isInteger(row.formSlot)){
+            const remove=node('button','刪除','quiet');remove.type='button';remove.setAttribute('aria-label',`刪除第 ${index+1} 列`);remove.onclick=protect(async()=>{
+                if(!confirm(`刪除第 ${index+1} 列？`))return;
+                invalidateSample(row);rows=rows.filter(r=>r.id!==row.id);renderRows();save();
+            });head.append(remove);
+        }
         const edit=node('div',undefined,'row-edit'),input=node('input'),confirmButton=node('button','確認','confirm-row');
         input.type='text';input.inputMode='numeric';input.maxLength=5;input.autocomplete='off';input.spellcheck=false;input.value=row.value;input.setAttribute('aria-label',`第 ${index+1} 列時間`);
         input.oninput=()=>{row.value=input.value;row.confirmed=false;invalidateSample(row);refreshRow(row,element,index);save();};
@@ -122,6 +126,14 @@ async function setPhoto(file){
 for(const id of ['camera','photo'])$(id).onchange=protect(async event=>{const file=event.target.files?.[0];if(file)await setPhoto(file);event.target.value='';});
 $('angle').oninput=()=>{if(!source||batchRunning)return;const angle=Number($('angle').value);$('angle-value').value=angle+'°';if(photo!==source){photo.width=1;photo.height=1;}photo=rotatedPhoto(source,angle);draw();};
 $('full-frame').onclick=()=>{if(!batchRunning){roi={x:0,y:0,w:1,h:1};draw();}};
+function updateRowMode(){
+    const grid=$('row-mode').value==='grid30';
+    $('row-count-field').hidden=grid;
+    $('row-mode-help').textContent=grid
+        ? '請框住時間欄完整 30 格與上下格線，旁邊文字留在框外。每格保留原位；看不清的格子留空供校正。'
+        : '自由手寫時，列數只用來核對，不會等高硬切；請框近時間欄。';
+}
+$('row-mode').onchange=updateRowMode;updateRowMode();
 $('save-template').onclick=protect(async()=>{if(!validRoi(roi))throw new Error('請先框選有效範圍。');await store.setState('template',{schema:1,roi});notice('已記住比例範圍；每張照片仍需核對框位。');});
 $('use-template').onclick=protect(async()=>{if(batchRunning)return;const template=await store.getState('template');if(template?.schema!==1||!validRoi(template.roi))throw new Error('尚未記住有效範圍。');roi=template.roi;draw();notice('已套用比例範圍；拍攝角度或距離不同時請重新調整。');});
 $('demo').onclick=protect(async()=>{const response=await fetch(new URL('../assets/demo-times.png',import.meta.url));if(!response.ok)throw new Error('示例載入失敗。');await setPhoto(new File([await response.blob()],'demo.png',{type:'image/png'}));notice('這是 MNIST 手寫數字組成的示例，不是你的字跡或實拍準確率。');});
@@ -137,13 +149,14 @@ function renderModelTabs(){
         button.onclick=()=>{syncActive();activeEngine=run.engine;rows=run.rows;renderRows();save();$('output').value='';};host.append(button);
     }
 }
-for(const engine of ENGINES){
-    const label=node('label',undefined,'engine-option'),input=node('input');input.type='checkbox';input.value=engine.id;input.name='engine';input.checked=engine.id==='cnn';input.onchange=protect(async()=>{await store.setState('engine-selection',{schema:1,ids:[...document.querySelectorAll('input[name=engine]:checked')].map(i=>i.value)});});
-    const text=node('span');text.append(node('strong',engine.name),node('small',engine.description));label.append(input,text);$('engine-options').append(label);
+{
+    const engine=engineById(SCAN_ENGINE),card=node('div',undefined,'engine-option'),text=node('span');
+    text.append(node('strong',engine.name),node('small','已選用；原有權重與下載包可繼續使用。'));
+    card.append(text);$('engine-options').append(card);
 }
 function endWorker(){clearTimeout(timer);assetController?.abort();assetController=null;worker?.terminate();worker=null;rejectCurrent=null;}
 function cancelBatch(){queueCancelled=true;job++;const reject=rejectCurrent;endWorker();if(reject)reject(new Error('已取消此模型。'));}
-$('cancel').onclick=()=>{cancelBatch();$('progress').textContent='已取消；已完成的模型與原草稿保留。';};
+$('cancel').onclick=()=>{cancelBatch();$('progress').textContent='已取消；原草稿保留。';};
 function runEngine(engine,pixels,crop,options){
     const id=++job;
     return new Promise((resolve,reject)=>{
@@ -157,14 +170,14 @@ function runEngine(engine,pixels,crop,options){
             let assets;
             if(engine.kind==='line'){
                 assetController=new AbortController();const signal=assetController.signal;
-                const {loadEngineAssets}=await import('./engine-assets.js?build=6ac4ff17052f');
+                const {loadEngineAssets}=await import('./engine-assets.js?build=ca6156e4fbfb');
                 if(id!==job||settled)return;
-                const {withAssetBudget}=await import('./asset-download.js?build=6ac4ff17052f');
+                const {withAssetBudget}=await import('./asset-download.js?build=ca6156e4fbfb');
                 assets=await withAssetBudget(()=>loadEngineAssets(engine.id,progress,signal),assetController);
                 if(id!==job||settled)return;
             }
             timer=setTimeout(()=>finish(null,'模型已準備，但初始化／辨識超過 4 分鐘，已停止；已安裝檔案與其他結果保留。'),240000);
-            worker=new Worker(new URL(engine.id==='cnn'?'./ocr-worker.js?build=6ac4ff17052f':'./line-worker.js?build=6ac4ff17052f',import.meta.url),{type:'module'});
+            worker=new Worker(new URL(engine.id==='cnn'?'./ocr-worker.js?build=ca6156e4fbfb':'./line-worker.js?build=ca6156e4fbfb',import.meta.url),{type:'module'});
             worker.onerror=event=>finish(null,'辨識模組錯誤：'+event.message);
             worker.onmessage=({data})=>{
                 if(data.id!==job||settled)return;
@@ -181,31 +194,29 @@ function runEngine(engine,pixels,crop,options){
 $('recognize').onclick=protect(async()=>{
     if(installing)throw new Error('請等模型準備完成，或先取消準備。');
     if(batchRunning||!photo)return;
-    const selected=selectedEngines([...document.querySelectorAll('input[name=engine]:checked')].map(i=>i.value));
-    if(rows.length&&!confirm('新辨識成功後會替換這張照片的模型比較結果。舊結果需要保留時請先匯出。繼續？'))return;
+    const selected=selectedEngines([SCAN_ENGINE]);
+    if(rows.length&&!confirm('新辨識成功後會替換目前校正結果。舊結果需要保留時請先匯出。繼續？'))return;
     const crop=cropPhoto(photo,roi),pixels=crop.getContext('2d').getImageData(0,0,crop.width,crop.height);
-    const options={rowCount:$('row-count').value,digitMode:$('digit-mode').value};
+    const options={rowMode:$('row-mode').value,rowCount:$('row-mode').value==='grid30'?'30':$('row-count').value,digitMode:$('digit-mode').value};
     const completed=[];let hasSuccess=false;
-    batchRunning=true;queueCancelled=false;$('recognize').disabled=true;$('cancel').hidden=false;
-    for(const input of document.querySelectorAll('input[name=engine]'))input.disabled=true;
+    batchRunning=true;queueCancelled=false;$('recognize').disabled=true;$('row-mode').disabled=true;$('cancel').hidden=false;
     try{
         for(const engine of selected){
             if(queueCancelled)break;
             const started=performance.now();
             try{
                 const data=await runEngine(engine,pixels,crop,options);
-                const next=data.rows.map(item=>({...newRow(item.raw),thumbnail:thumbnail(crop,item.box),transcript:item.transcript??item.raw,numericOnly:item.numericOnly===true,predictions:item.predictions,uncertain:item.uncertain,reason:item.reason,modelHash:item.modelHash}));
+                const next=data.rows.map((item,index)=>({...newRow(item.raw),thumbnail:thumbnail(crop,item.box),transcript:item.transcript??item.raw,numericOnly:item.numericOnly===true,predictions:item.predictions,uncertain:item.uncertain,reason:item.reason,modelHash:item.modelHash,...(options.rowMode==='grid30'?{formSlot:index+1}:{})}));
                 completed.push({engine:engine.id,rows:next,status:'ready',elapsedMs:performance.now()-started,error:''});
                 if(!hasSuccess){hasSuccess=true;activeEngine=engine.id;rows=next;}
             }catch(error){completed.push({engine:engine.id,rows:[],status:queueCancelled?'cancelled':'error',elapsedMs:performance.now()-started,error:String(error.message||error)});}
             if(hasSuccess){syncActive();modelRuns=completed;renderRows();save();}
         }
-        if(hasSuccess){batchRunning=false;tab('review');notice(`完成 ${completed.filter(r=>r.status==='ready').length} / ${selected.length} 個模型。點模型名稱，各自核對與匯出；結果互不覆蓋。`);}
+        if(hasSuccess){batchRunning=false;tab('review');notice('辨識完成。請對照每格原圖校正並確認，之後再複製。');}
         else notice(completed.map(r=>`${engineById(r.engine)?.name}：${r.error}`).join('；')||'辨識取消；原草稿保留。',true);
     }finally{
-        endWorker();batchRunning=false;crop.width=1;crop.height=1;$('recognize').disabled=!photo;$('cancel').hidden=true;
-        for(const input of document.querySelectorAll('input[name=engine]'))input.disabled=false;
-        $('progress').textContent=queueCancelled?'已取消；已完成結果保留。':`完成 ${completed.filter(r=>r.status==='ready').length} / ${selected.length} 個模型。各模型耗時包含首次下載。`;
+        endWorker();batchRunning=false;crop.width=1;crop.height=1;$('recognize').disabled=!photo;$('row-mode').disabled=false;$('cancel').hidden=true;
+        $('progress').textContent=queueCancelled?'已取消；已完成結果保留。':`完成 ${completed.filter(r=>r.status==='ready').length} / ${selected.length} 次辨識。耗時包含首次載入。`;
     }
 });
 function installationProgress(message,error=false){
@@ -217,9 +228,9 @@ function installControls(busy){
     $('cancel-install').hidden=!busy;$('recognize').disabled=busy||batchRunning||!photo;
 }
 async function showModelStorage(){
-    const {modelStorage,clearModel}=await import('./engine-assets.js?build=6ac4ff17052f'),info=await modelStorage(),host=$('model-storage');host.replaceChildren();
+    const {modelStorage,clearModel}=await import('./engine-assets.js?build=ca6156e4fbfb'),info=await modelStorage(),host=$('model-storage');host.replaceChildren();
     host.append(node('p',`共用引擎 ${(info.runtimeBytes/1048576).toFixed(1)} MiB · ${info.runtimeInstalled?'已完整保存':'尚未完整保存'}（${(info.runtimeSaved/1048576).toFixed(1)} MiB；非 RAM）。`));
-    for(const item of info.items){
+    for(const item of info.items.filter(item=>item.id===SCAN_ENGINE)){
         const line=node('div',undefined,'model-storage-line');
         line.append(node('span',`${engineById(item.id)?.name}：${(item.bytes/1048576).toFixed(1)} MiB · ${item.installed?'已下載保存':'尚未完整下載'} · ${item.ready?'可辨識':'仍需準備'}`));
         const install=node('button',item.ready?'檢查已安裝檔案':'下載並保存');install.type='button';install.dataset.modelAction='install';install.dataset.modelId=item.id;install.disabled=installing;
@@ -238,9 +249,9 @@ async function runInstallation(action){
     const report=(message,error=false)=>{if(id===installJob)installationProgress(message,error);};
     report('準備模型檔案；下載不占用四分鐘辨識時間，照片不會上傳。');
     try{
-        const {withAssetBudget}=await import('./asset-download.js?build=6ac4ff17052f');
+        const {withAssetBudget}=await import('./asset-download.js?build=ca6156e4fbfb');
         await withAssetBudget(signal=>action(report,signal),controller);
-        if(id===installJob)notice('模型準備完成，可回掃描頁勾選並辨識。');
+        if(id===installJob)notice('模型準備完成，可回掃描頁辨識。');
     }catch(error){if(id===installJob){report(error.message||String(error),true);notice(error.message||String(error),true);}}
     finally{
         if(id===installJob){installController=null;installControls(false);await showModelStorage().catch(error=>report('容量讀取失敗：'+error.message,true));}
@@ -250,20 +261,20 @@ async function prepareModels(ids){
     const names=ids.filter(id=>engineById(id)?.kind==='line');
     if(!names.length){installationProgress('小型 CNN 不需要大型安裝包；直接選照片辨識即可。');return;}
     await runInstallation(async(report,signal)=>{
-        const {prepareEngine}=await import('./engine-assets.js?build=6ac4ff17052f');
+        const {prepareEngine}=await import('./engine-assets.js?build=ca6156e4fbfb');
         for(const id of names)await prepareEngine(id,message=>report(`${engineById(id).name}：${message}`),signal);
         report(`已完整保存 ${names.length} 個模型與共用引擎；可開始辨識。`);
     });
 }
 $('show-model-storage').onclick=protect(async()=>{if(batchRunning)throw new Error('請等辨識完成或先取消。');await showModelStorage();});
 $('open-model-settings').onclick=()=>{tab('settings');void showModelStorage().catch(error=>notice(error.message,true));};
-$('install-selected').onclick=()=>void prepareModels([...document.querySelectorAll('input[name=engine]:checked')].map(input=>input.value));
+$('install-selected').onclick=()=>void prepareModels([SCAN_ENGINE]);
 $('cancel-install').onclick=()=>installController?.abort(new Error('已取消模型準備；完整存好的檔案與原草稿保留。'));
 $('model-package').onchange=protect(async event=>{
     const file=event.target.files?.[0];event.target.value='';if(!file)return;
-    await runInstallation(async(report,signal)=>{const {importModelPack}=await import('./model-pack.js?build=6ac4ff17052f');await importModelPack(file,report,signal);});
+    await runInstallation(async(report,signal)=>{const {importModelPack}=await import('./model-pack.js?build=ca6156e4fbfb');await importModelPack(file,report,signal);});
 });
-$('add-row').onclick=()=>{if(rows.length>=100){notice('每批最多 100 列。',true);return;}rows.push(newRow());renderRows();save();$('rows').lastElementChild.querySelector('input').focus();};
+$('add-row').onclick=()=>{if(rows.some(row=>Number.isInteger(row.formSlot))){notice('表單 30 格已保留每格位置；請直接修改對應格。',true);return;}if(rows.length>=100){notice('每批最多 100 列。',true);return;}rows.push(newRow());renderRows();save();$('rows').lastElementChild.querySelector('input').focus();};
 $('confirm-valid').onclick=protect(async()=>{if(!rows.length)throw new Error('目前沒有結果。');if(!confirm('確認已對照原圖核對所有有效時間？此動作不是自動辨識驗證。'))return;for(const row of rows)if(parseTime(row.value).valid)await confirmRow(row);renderRows();save();});
 function download(blob,name){const url=URL.createObjectURL(blob),link=node('a');link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
 for(const format of ['txt','csv'])$(format).onclick=protect(async()=>{const text=exportTimes(rows,format);$('output').value=exportTimes(rows,'txt');download(new Blob([text],{type:format==='csv'?'text/csv;charset=utf-8':'text/plain;charset=utf-8'}),'Oc-Times'+(activeEngine&&activeEngine!=='legacy'?'-'+activeEngine:'')+'.'+format);notice('已交給瀏覽器下載；原有草稿仍保留。');});
@@ -271,7 +282,7 @@ $('copy').onclick=protect(async()=>{const text=exportTimes(rows);$('output').val
 async function refreshMetrics(){try{const data=await store.metrics();$('storage-status').textContent=`草稿 ${data.rows} 列 · 教材 ${data.samples} / 2,000 列 · 約 ${(data.bytes/1024).toFixed(1)} KB`; }catch(error){$('storage-status').textContent='讀取失敗：'+error.message;}}
 $('export-training').onclick=protect(async()=>{
     const samples=await store.allSamples();if(!samples.length)throw new Error('尚未收集教材。先勾選收集字跡，再確認有原圖的時間列。');
-    const {zipFiles}=await import('./zip.js?build=6ac4ff17052f');
+    const {zipFiles}=await import('./zip.js?build=ca6156e4fbfb');
     const labels=[],files=[];
     samples.forEach((sample,index)=>{
         const name=`images/${String(index+1).padStart(6,'0')}.png`;
@@ -291,5 +302,3 @@ try{
     const restored=restoreDraft(draft);rows=restored.rows;modelRuns=restored.runs;activeEngine=restored.activeEngine;
 }catch(error){storageSafe=false;notice('無法還原本機草稿：'+error.message+'。資料未被清除。',true);}
 renderRows();
-
-try{const choice=await store.getState('engine-selection');if(choice?.schema===1&&Array.isArray(choice.ids)&&choice.ids.every(id=>engineById(id)))for(const input of document.querySelectorAll('input[name=engine]'))input.checked=choice.ids.includes(input.value);}catch{ /* Core draft restore already reports storage restrictions. */ }
