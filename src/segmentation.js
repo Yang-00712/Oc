@@ -68,24 +68,76 @@ export function normalizeDigit(mask,width,box) {
     for(let y=0;y<28;y++) for(let x=0;x<28;x++) if(x+dx>=0&&x+dx<28&&y+dy>=0&&y+dy<28) centered[(y+dy)*28+x+dx]=result[y*28+x];
     return centered;
 }
+function gridColumn(dark,width,height) {
+    // Track thin vertical rules through short bands so a slightly tilted rule
+    // need not occupy one fixed x coordinate for the entire photograph.
+    const tracks=[],count=12,yStart=Math.floor(height*.08),yEnd=Math.ceil(height*.92);
+    const maxStep=Math.max(4,Math.ceil(width*.025)),maxThickness=Math.max(6,Math.ceil(width*.045));
+    for(let band=0;band<count;band++){
+        const top=Math.floor(yStart+(yEnd-yStart)*band/count),bottom=Math.floor(yStart+(yEnd-yStart)*(band+1)/count),projection=new Uint8Array(width);
+        for(let x=0;x<width;x++){
+            let covered=0,run=0,longest=0;
+            for(let y=top;y<bottom;y++){
+                let ink=0;for(let dx=-1;dx<=1;dx++)if(x+dx>=0&&x+dx<width&&dark[y*width+x+dx]){ink=1;break;}
+                covered+=ink;run=ink?run+1:0;longest=Math.max(longest,run);
+            }
+            if(covered>=(bottom-top)*.72&&longest>=(bottom-top)*.55)projection[x]=1;
+        }
+        const centres=runs(projection,0).filter(([a,b])=>b-a<=maxThickness).map(([a,b])=>({x:(a+b-1)/2,y:(top+bottom)/2,radius:(b-a-1)/2}));
+        const used=new Set();
+        for(const point of centres){
+            let best=null,distance=Infinity;
+            for(const track of tracks){
+                if(used.has(track)||band-track.lastBand>2)continue;
+                const gap=Math.abs(point.x-track.points.at(-1).x);
+                if(gap<=maxStep*(band-track.lastBand)&&gap<distance){best=track;distance=gap;}
+            }
+            if(!best){best={points:[],lastBand:band};tracks.push(best);}
+            best.points.push(point);best.lastBand=band;used.add(best);
+        }
+    }
+    const rules=tracks.filter(t=>t.points.length>=count*.75).map(t=>{
+        const points=t.points,n=points.length,mx=points.reduce((s,p)=>s+p.x,0)/n,my=points.reduce((s,p)=>s+p.y,0)/n;
+        let numerator=0,denominator=0;for(const p of points){numerator+=(p.y-my)*(p.x-mx);denominator+=(p.y-my)**2;}
+        const slope=denominator?numerator/denominator:0,intercept=mx-slope*my;
+        const residual=Math.max(...points.map(p=>Math.abs(p.x-(intercept+slope*p.y))));
+        return {intercept,slope,radius:Math.max(...points.map(p=>p.radius))+residual,residual};
+    }).filter(rule=>rule.residual<=Math.max(2,width*.012)).sort((a,b)=>(a.intercept+a.slope*height/2)-(b.intercept+b.slope*height/2));
+    if(rules.length<2)return null;
+    const candidates=[];
+    for(let i=0;i<rules.length-1;i++){
+        const a=rules[i],b=rules[i+1];
+        const gap=Math.min(...[0,height-1].map(y=>(b.intercept+b.slope*y-b.radius)-(a.intercept+a.slope*y+a.radius)));
+        // With extra parallel rules, discard a gutter narrower than one cell
+        // height. Two plausible data columns are ambiguous and must be reframed.
+        if(gap>=Math.max(8,height/30))candidates.push({a,b});
+    }
+    if(!candidates.length)throw new Error('無法定位足夠寬的時間欄，請保留兩側格線並避開大片深色遮蓋。');
+    if(candidates.length>1)throw new Error('框內有多個可能的時間欄，請只保留一個時間欄與少量邊界。');
+    const {a,b}=candidates[0];
+    return y=>({left:Math.max(0,Math.ceil(a.intercept+a.slope*y+a.radius+1)),right:Math.min(width,Math.floor(b.intercept+b.slope*y-b.radius))});
+}
 function gridBoundaries(rgba,width,height,edgeMode='auto') {
     if(!['auto','crop-top','crop-bottom','crop-both'].includes(edgeMode))throw new Error('表單外框選項無效。');
     // Search the original pixels: thresholdImage deliberately erases long rules.
-    // A three-pixel window tolerates slightly slanted photographed lines.
+    // Use neutral/dark printed rules; a flat coloured mask is not a grid line.
     const dark=new Uint8Array(width*height);
     for(let i=0;i<dark.length;i++) {
         const p=i*4;
-        dark[i]=(.299*rgba[p]+.587*rgba[p+1]+.114*rgba[p+2])<155?1:0;
+        const r=rgba[p],g=rgba[p+1],b=rgba[p+2],high=Math.max(r,g,b),low=Math.min(r,g,b);
+        dark[i]=(.299*r+.587*g+.114*b)<155&&(high-low<=40||high<=70)?1:0;
     }
-    const projection=new Uint8Array(height);
+    const column=gridColumn(dark,width,height),projection=new Uint8Array(height);
     for(let y=0;y<height;y++) {
+        const {left,right}=column?column(y):{left:0,right:width},span=right-left;
+        if(span<8)throw new Error('時間欄邊界相交或過窄，請拍正並重新框選。');
         let covered=0,consecutive=0,longest=0;
-        for(let x=0;x<width;x++) {
+        for(let x=left;x<right;x++) {
             let ink=0;
             for(let dy=-2;dy<=2;dy++) if(y+dy>=0&&y+dy<height&&dark[(y+dy)*width+x]) {ink=1;break;}
             covered+=ink;consecutive=ink?consecutive+1:0;longest=Math.max(longest,consecutive);
         }
-        projection[y]=covered>=width*.72&&longest>=width*.55?1:0;
+        projection[y]=covered>=span*.72&&longest>=span*.55?1:0;
     }
     const bands=runs(projection,2),lines=bands.map(([start,end])=>Math.floor((start+end-1)/2));
     const addTop=edgeMode==='crop-top'||edgeMode==='crop-both',addBottom=edgeMode==='crop-bottom'||edgeMode==='crop-both';
@@ -106,18 +158,18 @@ function gridBoundaries(rgba,width,height,edgeMode='auto') {
         if(gap<middle*.55||gap>middle*1.65)throw new Error('框選邊緣與第一／最後格線的距離不像一格。請對齊整格外緣；不能切掉半格或加入一整段頁邊。');
     }
     if(addTop)lines.unshift(0);if(addBottom)lines.push(height-1);
-    return {lines,dark,addTop,addBottom};
+    return {lines,dark,addTop,addBottom,column};
 }
 function segmentGrid30(rgba,width,height,mask,options) {
-    const {lines,dark,addTop,addBottom}=gridBoundaries(rgba,width,height,options.gridEdges);
+    const {lines,dark,addTop,addBottom,column}=gridBoundaries(rgba,width,height,options.gridEdges);
     // Exclude page-long vertical borders from the line model's original image.
     const columns=new Uint8Array(width);
-    for(let x=0;x<width;x++) {
+    if(!column)for(let x=0;x<width;x++) {
         let count=0;for(let y=lines[0];y<=lines[30];y++) count+=dark[y*width+x];
         if(count>=(lines[30]-lines[0]+1)*.75) columns[x]=1;
     }
     let left=0,right=width;
-    const borders=runs(columns,0);
+    const borders=column?[]:runs(columns,0);
     if(borders.length>2) throw new Error('時間欄內有多條直邊，請只框選一個時間欄。');
     if(borders.length===2) {
         left=borders[0][1];right=borders[1][0];
@@ -133,8 +185,11 @@ function segmentGrid30(rgba,width,height,mask,options) {
         const edgeNote=croppedTop?'此格上緣使用你指定的框選邊界，請確認數字完整。':croppedBottom?'此格下緣使用你指定的框選邊界，請確認數字完整。':'';
         const top=lines[i]+(croppedTop?0:3),bottom=lines[i+1]-(croppedBottom?0:3);
         if(bottom<=top) throw new Error('30 格的格線間距過小。');
-        const box={x:0,y:lines[i],width,height:lines[i+1]-lines[i]};
-        const ink=bounds(mask,width,left,top,right,bottom);
+        const limits=column?[column(top),column(bottom)]:[{left,right}];
+        const cellLeft=Math.max(...limits.map(p=>p.left)),cellRight=Math.min(...limits.map(p=>p.right));
+        if(cellRight-cellLeft<8)throw new Error('時間欄過窄或傾斜過大，請重新框選。');
+        const box={x:cellLeft,y:lines[i],width:cellRight-cellLeft,height:lines[i+1]-lines[i]};
+        const ink=bounds(mask,width,cellLeft,top,cellRight,bottom);
         if(!ink||ink.ink<3) return {box,glyphs:[],uncertain:true,reason:edgeNote+'此格空白，請人工確認。'};
         const vertical=new Uint8Array(ink.width);
         for(let x=0;x<ink.width;x++) for(let y=ink.y;y<ink.y+ink.height;y++) if(mask[y*width+ink.x+x]) {vertical[x]=1;break;}
@@ -142,8 +197,8 @@ function segmentGrid30(rgba,width,height,mask,options) {
         const automatic=options.digitMode!=='equal'&&groups.length===4;
         const split=automatic?groups.map(([s,e])=>[ink.x+s,ink.x+e]):Array.from({length:4},(_,n)=>[ink.x+Math.floor(n*ink.width/4),ink.x+Math.floor((n+1)*ink.width/4)]);
         const glyphs=split.map(([start,end])=>normalizeDigit(mask,width,bounds(mask,width,start,top,end,bottom)));
-        const pad=Math.max(1,Math.round(ink.height*.1)),x=Math.max(left,ink.x-pad),y=Math.max(top,ink.y-pad);
-        const lineBox={x,y,width:Math.min(right,ink.x+ink.width+pad)-x,height:Math.min(bottom,ink.y+ink.height+pad)-y};
+        const pad=Math.max(1,Math.round(ink.height*.1)),x=Math.max(cellLeft,ink.x-pad),y=Math.max(top,ink.y-pad);
+        const lineBox={x,y,width:Math.min(cellRight,ink.x+ink.width+pad)-x,height:Math.min(bottom,ink.y+ink.height+pad)-y};
         return {box,lineBox,glyphs,uncertain:!!edgeNote||!automatic,reason:edgeNote+(automatic?'':'格內數字未能明確分成四個，請核對。')};
     });
 }

@@ -5,7 +5,7 @@
 | 主畫面更新 | `src/update.js`, `tools/stamp.mjs`, `tools/update-check.mjs` | `startUpdates` / pageshow / visibilitychange；不清資料、不重建圖示 |
 | 入口與操作 | `index.html`, `src/app.js`, `app.css` | 拍照、框選、校正、`recognize` / `renderRows` |
 | 時間規則 | `src/time.js` | `parseTime` / `exportTimes`；不可猜補 |
-| 圖片與列切割 | `src/photo.js`, `src/segmentation.js`, `tests/grid.test.mjs` | `cropPhoto` / `segment` / `grid30` / `gridEdges` / `normalizeDigit` |
+| 圖片與列切割 | `src/photo.js`, `src/segmentation.js`, `tests/grid.test.mjs` | `cropPhoto` / `segment` / `gridColumn` / `grid30` / `gridEdges` / `normalizeDigit` |
 | 推論 | `src/ocr-worker.js`, `src/cnn.js`, `models/model.json` | 權重hash、`infer`、Worker生命週期 |
 | 本機保存 | `src/store.js`, `src/zip.js` | IndexedDB、`saveSample`、ZIP、不碰StrForge |
 | 訓練與模型來源 | `tools/train-model.py`, `models/training-metrics.json` | MNIST、模型參數、單字測試限制 |

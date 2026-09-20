@@ -1,9 +1,9 @@
-import { parseTime, exportTimes, orderWarnings } from './time.js?build=d655f868feaf';
-import { decodePhoto, rotatedPhoto, cropPhoto, thumbnail } from './photo.js?build=d655f868feaf';
-import { engineById, selectedEngines, comparisonStats } from './engines.js?build=d655f868feaf';
-import { restoreDraft, snapshotDraft } from './multi-state.js?build=d655f868feaf';
-import { startUpdates } from './update.js?build=d655f868feaf';
-import * as store from './store.js?build=d655f868feaf';
+import { parseTime, exportTimes, orderWarnings } from './time.js?build=f0939ad64ecb';
+import { decodePhoto, rotatedPhoto, cropPhoto, thumbnail } from './photo.js?build=f0939ad64ecb';
+import { engineById, selectedEngines, comparisonStats } from './engines.js?build=f0939ad64ecb';
+import { restoreDraft, snapshotDraft } from './multi-state.js?build=f0939ad64ecb';
+import { startUpdates } from './update.js?build=f0939ad64ecb';
+import * as store from './store.js?build=f0939ad64ecb';
 
 const $=id=>document.getElementById(id);
 const SCAN_ENGINE='ppocr-v5-ch';
@@ -174,14 +174,14 @@ function runEngine(engine,pixels,crop,options){
             let assets;
             if(engine.kind==='line'){
                 assetController=new AbortController();const signal=assetController.signal;
-                const {loadEngineAssets}=await import('./engine-assets.js?build=d655f868feaf');
+                const {loadEngineAssets}=await import('./engine-assets.js?build=f0939ad64ecb');
                 if(id!==job||settled)return;
-                const {withAssetBudget}=await import('./asset-download.js?build=d655f868feaf');
+                const {withAssetBudget}=await import('./asset-download.js?build=f0939ad64ecb');
                 assets=await withAssetBudget(()=>loadEngineAssets(engine.id,progress,signal),assetController);
                 if(id!==job||settled)return;
             }
             timer=setTimeout(()=>finish(null,'模型已準備，但初始化／辨識超過 4 分鐘，已停止；已安裝檔案與其他結果保留。'),240000);
-            worker=new Worker(new URL(engine.id==='cnn'?'./ocr-worker.js?build=d655f868feaf':'./line-worker.js?build=d655f868feaf',import.meta.url),{type:'module'});
+            worker=new Worker(new URL(engine.id==='cnn'?'./ocr-worker.js?build=f0939ad64ecb':'./line-worker.js?build=f0939ad64ecb',import.meta.url),{type:'module'});
             worker.onerror=event=>finish(null,'辨識模組錯誤：'+event.message);
             worker.onmessage=({data})=>{
                 if(data.id!==job||settled)return;
@@ -232,7 +232,7 @@ function installControls(busy){
     $('cancel-install').hidden=!busy;$('recognize').disabled=busy||batchRunning||!photo;
 }
 async function showModelStorage(){
-    const {modelStorage,clearModel}=await import('./engine-assets.js?build=d655f868feaf'),info=await modelStorage(),host=$('model-storage');host.replaceChildren();
+    const {modelStorage,clearModel}=await import('./engine-assets.js?build=f0939ad64ecb'),info=await modelStorage(),host=$('model-storage');host.replaceChildren();
     host.append(node('p',`共用引擎 ${(info.runtimeBytes/1048576).toFixed(1)} MiB · ${info.runtimeInstalled?'已完整保存':'尚未完整保存'}（${(info.runtimeSaved/1048576).toFixed(1)} MiB；非 RAM）。`));
     for(const item of info.items.filter(item=>item.id===SCAN_ENGINE)){
         const line=node('div',undefined,'model-storage-line');
@@ -253,7 +253,7 @@ async function runInstallation(action){
     const report=(message,error=false)=>{if(id===installJob)installationProgress(message,error);};
     report('準備模型檔案；下載不占用四分鐘辨識時間，照片不會上傳。');
     try{
-        const {withAssetBudget}=await import('./asset-download.js?build=d655f868feaf');
+        const {withAssetBudget}=await import('./asset-download.js?build=f0939ad64ecb');
         await withAssetBudget(signal=>action(report,signal),controller);
         if(id===installJob)notice('模型準備完成，可回掃描頁辨識。');
     }catch(error){if(id===installJob){report(error.message||String(error),true);notice(error.message||String(error),true);}}
@@ -265,7 +265,7 @@ async function prepareModels(ids){
     const names=ids.filter(id=>engineById(id)?.kind==='line');
     if(!names.length){installationProgress('小型 CNN 不需要大型安裝包；直接選照片辨識即可。');return;}
     await runInstallation(async(report,signal)=>{
-        const {prepareEngine}=await import('./engine-assets.js?build=d655f868feaf');
+        const {prepareEngine}=await import('./engine-assets.js?build=f0939ad64ecb');
         for(const id of names)await prepareEngine(id,message=>report(`${engineById(id).name}：${message}`),signal);
         report(`已完整保存 ${names.length} 個模型與共用引擎；可開始辨識。`);
     });
@@ -276,7 +276,7 @@ $('install-selected').onclick=()=>void prepareModels([SCAN_ENGINE]);
 $('cancel-install').onclick=()=>installController?.abort(new Error('已取消模型準備；完整存好的檔案與原草稿保留。'));
 $('model-package').onchange=protect(async event=>{
     const file=event.target.files?.[0];event.target.value='';if(!file)return;
-    await runInstallation(async(report,signal)=>{const {importModelPack}=await import('./model-pack.js?build=d655f868feaf');await importModelPack(file,report,signal);});
+    await runInstallation(async(report,signal)=>{const {importModelPack}=await import('./model-pack.js?build=f0939ad64ecb');await importModelPack(file,report,signal);});
 });
 $('add-row').onclick=()=>{if(rows.some(row=>Number.isInteger(row.formSlot))){notice('表單 30 格已保留每格位置；請直接修改對應格。',true);return;}if(rows.length>=100){notice('每批最多 100 列。',true);return;}rows.push(newRow());renderRows();save();$('rows').lastElementChild.querySelector('input').focus();};
 $('confirm-valid').onclick=protect(async()=>{if(!rows.length)throw new Error('目前沒有結果。');if(!confirm('確認已對照原圖核對所有有效時間？此動作不是自動辨識驗證。'))return;for(const row of rows)if(parseTime(row.value).valid)await confirmRow(row);renderRows();save();});
@@ -286,7 +286,7 @@ $('copy').onclick=protect(async()=>{const text=exportTimes(rows);$('output').val
 async function refreshMetrics(){try{const data=await store.metrics();$('storage-status').textContent=`草稿 ${data.rows} 列 · 教材 ${data.samples} / 2,000 列 · 約 ${(data.bytes/1024).toFixed(1)} KB`; }catch(error){$('storage-status').textContent='讀取失敗：'+error.message;}}
 $('export-training').onclick=protect(async()=>{
     const samples=await store.allSamples();if(!samples.length)throw new Error('尚未收集教材。先勾選收集字跡，再確認有原圖的時間列。');
-    const {zipFiles}=await import('./zip.js?build=d655f868feaf');
+    const {zipFiles}=await import('./zip.js?build=f0939ad64ecb');
     const labels=[],files=[];
     samples.forEach((sample,index)=>{
         const name=`images/${String(index+1).padStart(6,'0')}.png`;
