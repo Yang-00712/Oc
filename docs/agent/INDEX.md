@@ -2,6 +2,7 @@
 
 | 主題 | 權威檔案 | 何時讀／搜尋詞 |
 |---|---|---|
+| 主畫面更新 | `src/update.js`, `tools/stamp.mjs`, `tools/update-check.mjs` | `startUpdates` / pageshow / visibilitychange；不清資料、不重建圖示 |
 | 入口與操作 | `index.html`, `src/app.js`, `app.css` | 拍照、框選、校正、`recognize` / `renderRows` |
 | 時間規則 | `src/time.js` | `parseTime` / `exportTimes`；不可猜補 |
 | 圖片與列切割 | `src/photo.js`, `src/segmentation.js`, `tests/grid.test.mjs` | `cropPhoto` / `segment` / `grid30` / `normalizeDigit` |

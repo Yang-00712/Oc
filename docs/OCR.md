@@ -59,3 +59,7 @@ CNN僅0–9：55,000訓練、5,000驗證、10,000未用於選模的測試圖，s
 `src/model-pack.js` 僅接受大小及檔數受限的 ZIP_STORED 包。全包依本站 `src/model-catalog.js` 固定清單驗證，不能信任包內自帶hash或執行任意腳本；每個檔案完整驗證後才寫入，損毀包不覆蓋正常模型。模型與共用引擎均完整保存才標可辨識。
 
 `tools/model-install-check.mjs` 從設定頁點真實通用包下載連結，核對下載內容、匯入下載檔、重載，再封鎖模型與共用引擎HTTP請求進行通用模型實際推論。另驗證損毀包拒絕、取消、四分鐘邊界與資料保留；不代表實體iPhone驗收或整站離線。
+
+## 主畫面更新
+
+參考 StrForge 啟動時重新驗證入口的做法，Oc 以 index 內的內容 hash 核對新版；hash 涵蓋 JS、CSS 與正規化 HTML。`src/update.js` 監聽啟動、pageshow、visibilitychange、online，只向本站重新驗證小入口，沒有 Service Worker、全域 fetch 攔截或模型預載。安靜且無照片的畫面可自動跳轉至帶內容 hash 的同一路徑；已有操作先提示。重載前封鎖新輸入並等待全部草稿保存交易；失敗或未知 schema 不重載，辨識／安裝／其他操作進行中也不重載。sessionStorage 僅記錄 `oc-update-attempt` 防止同一版本自動循環；不清任何 IndexedDB、模型或 StrForge 資料。自動檢查失敗保留目前可用畫面，沒有短逾時反覆重抓；20 秒僅中止單次小入口檢查。
