@@ -1,7 +1,7 @@
 // Only Oc's bounded ZIP_STORED public model bundles. No arbitrary ZIP extraction,
 // executable loading, archive-provided hashes, or photograph/label import here.
-import { manifest, verifyBytes, saveVerifiedAsset } from './engine-assets.js?build=cfe03be0eec5';
-import { checkCancelled } from './asset-download.js?build=cfe03be0eec5';
+import { manifest, verifyBytes, saveVerifiedAsset } from './engine-assets.js?build=aea212fe8d9d';
+import { checkCancelled } from './asset-download.js?build=aea212fe8d9d';
 const decoder=new TextDecoder('utf-8',{fatal:true});
 const fail=message=>{throw new Error('模型 ZIP 無效：'+message);};
 export async function readStoredZip(file){
