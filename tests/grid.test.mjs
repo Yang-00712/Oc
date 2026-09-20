@@ -104,3 +104,49 @@ test('full rules cannot be combined with an extra crop edge',()=>{
 test('wide black masking is not accepted as a printed rule',()=>{
     assert.throws(()=>grid(ruledCrop({blackBand:true})),/黑帶/);
 });
+
+function widePaper({omit=[],gutter=false,tilt=0,extraColumn=false,green=[90,190,90],margins=5}={}){
+    const width=280,tableHeight=720,height=tableHeight+margins*2+1,{rgba,dot}=paper(width,height);
+    for(let y=0;y<height;y++)for(let x=176;x<width;x++){const p=(y*width+x)*4;[rgba[p],rgba[p+1],rgba[p+2]]=green;}
+    const left=y=>95+Math.round(tilt*(y-margins)/tableHeight);
+    for(let y=margins;y<=margins+tableHeight;y++){
+        dot(left(y),y);dot(175,y);if(gutter)dot(80,y);
+        if(extraColumn)dot(220,y);
+    }
+    for(let row=0;row<=30;row++)if(!omit.includes(row)){
+        const y=margins+row*24;
+        for(let x=gutter?80:left(y);x<=(extraColumn?220:175);x++)dot(x,y);
+    }
+    for(let row=0;row<30;row++)if(row!==11){
+        const top=margins+row*24;
+        for(const x of [111,126,141,156])for(let y=top+8;y<top+15;y++){dot(x,y);dot(x+1,y);}
+    }
+    // Ordinary notes outside the selected table must not enter any row image.
+    for(let y=10;y<height;y+=30)for(let x=12;x<42;x++)dot(x,y);
+    return {rgba,width,height,left};
+}
+test('wide crop with green masking finds the actual column and keeps blank slot 12',()=>{
+    const crop=widePaper(),cells=grid(crop);
+    assert.equal(cells.length,30);assert.equal(cells[11].glyphs.length,0);
+    for(const cell of cells){assert.ok(cell.box.x>=95&&cell.box.x+cell.box.width<175);if(cell.lineBox)assert.ok(cell.lineBox.x>=95&&cell.lineBox.x+cell.lineBox.width<175);}
+});
+test('thin tilted borders plus a narrow side gutter do not become a digit',()=>{
+    const crop=widePaper({gutter:true,tilt:-15,margins:65}),cells=grid(crop);
+    assert.equal(cells.length,30);assert.equal(cells[11].glyphs.length,0);
+    assert.ok(cells[0].box.x>95);assert.ok(cells[29].box.x<95);
+    assert.ok(cells.every(cell=>cell.box.x+cell.box.width<175));
+});
+test('wide crop still requires explicit consent for the missing outer edge',()=>{
+    const crop=widePaper({gutter:true,tilt:-12,omit:[0],margins:0});
+    assert.throws(()=>grid(crop),/偵測到 30 條/);
+    const cells=grid(crop,'crop-top');
+    assert.equal(cells.length,30);assert.match(cells[0].reason,/上緣/);assert.equal(cells[11].glyphs.length,0);
+});
+test('two plausible data columns are rejected instead of choosing silently',()=>{
+    const crop=widePaper({extraColumn:true,green:[255,255,255]});
+    assert.throws(()=>grid(crop),/多個可能的時間欄/);
+});
+test('a solid dark mask cannot masquerade as a thin outer rule',()=>{
+    const crop=widePaper({gutter:true,green:[30,50,30]});
+    assert.throws(()=>grid(crop),/無法定位|找不到完整/);
+});

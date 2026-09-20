@@ -13,19 +13,24 @@ const base='http://127.0.0.1:4173/Oc/',reports=[];
 const waitRoute=(promise)=>{let timer;return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('等待模型請求逾時')),30000);})]).finally(()=>clearTimeout(timer));};
 const readRows=page=>page.locator('.row-edit input').evaluateAll(items=>items.map(item=>item.value));
 const waitSaved=page=>page.waitForFunction(()=>document.querySelector('#save-status').textContent.includes('已保存'));
-const makeGrid=async (page,missingTop=false)=>{
- const data=await page.evaluate(missingTop=>{
-  const canvas=document.createElement('canvas');canvas.width=112;canvas.height=790;
-  const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,112,790);ctx.fillStyle='#141414';
+const makeGrid=async (page,missingTop=false,wide=false)=>{
+ const data=await page.evaluate(({missingTop,wide})=>{
+  const canvas=document.createElement('canvas');canvas.width=wide?280:112;canvas.height=790;
+  const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,790);
+  if(wide){ctx.fillStyle='rgb(90,190,90)';ctx.fillRect(176,0,104,790);}
+  ctx.fillStyle='#141414';
   const lines=[5];for(let i=0;i<30;i++)lines.push(lines.at(-1)+22+(i%4)*2);
-  for(const y of (missingTop?lines.slice(1):lines))ctx.fillRect(2,y,108,1);
-  ctx.fillRect(2,5,1,lines.at(-1)-4);ctx.fillRect(109,5,1,lines.at(-1)-4);
-  for(let row=0;row<30;row++)if(row!==11)for(const x of [21,40,59,78])ctx.fillRect(x,lines[row]+7,2,7);
+  for(const y of (missingTop?lines.slice(1):lines))ctx.fillRect(wide?80:2,y,wide?96:108,1);
+  if(wide){
+   for(let y=5;y<=lines.at(-1);y++){ctx.fillRect(80,y,1,1);ctx.fillRect(95-Math.round(15*y/lines.at(-1)),y,1,1);ctx.fillRect(175,y,1,1);}
+  }else{ctx.fillRect(2,5,1,lines.at(-1)-4);ctx.fillRect(109,5,1,lines.at(-1)-4);}
+  for(let row=0;row<30;row++)if(row!==11)for(const x of (wide?[111,126,141,156]:[21,40,59,78]))ctx.fillRect(x,lines[row]+7,2,7);
   return canvas.toDataURL('image/png').split(',')[1];
- },missingTop);
+ },{missingTop,wide});
  await page.locator('#photo').setInputFiles({name:'synthetic-grid.png',mimeType:'image/png',buffer:Buffer.from(data,'base64')});
- await page.waitForSelector('#photo-editor:not([hidden])');
+ await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('已載入照片'));
 };
+
 
 try{
  for(const[name,engine,options]of[['chromium',chromium,{viewport:{width:390,height:844}}],['webkit',webkit,{...devices['iPhone 14'],locale:'zh-TW'}]].filter(([name])=>!process.env.OC_BROWSER||name===process.env.OC_BROWSER)){
@@ -80,6 +85,21 @@ try{
    const gridDraft=await page.evaluate(async()=>await(await import('./src/store.js')).getState('draft'));
    assert.deepEqual(gridDraft.rows.map(row=>row.formSlot),Array.from({length:30},(_,i)=>i+1));
    assert.equal(gridDraft.rows[11].raw,'','Blank cell must remain empty');
+   // Wide selection, coloured mask and slanted narrow gutter: actual OCR still
+   // receives only the time cell, and a blank cell must not become a border digit.
+   await page.locator('[data-tab=scan]').click();await makeGrid(page,false,true);
+   await page.locator('#recognize').click();await page.waitForSelector('#review:not([hidden])',{timeout:240000});await waitSaved(page);
+   const wideDraft=await page.evaluate(async()=>await(await import('./src/store.js')).getState('draft'));
+   assert.equal(wideDraft.rows.length,30);assert.equal(wideDraft.rows[11].raw,'');
+   assert.equal(wideDraft.rows[11].reason.includes('空白'),true);
+   const greenPixels=await page.evaluate(async()=>{
+    const image=document.querySelector('.row img');await image.decode();
+    const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
+    const context=canvas.getContext('2d');context.drawImage(image,0,0);const pixels=context.getImageData(0,0,canvas.width,canvas.height).data;
+    let green=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i+1]-pixels[i]>40&&pixels[i+1]-pixels[i+2]>40)green++;
+    return green;
+   });
+   assert.equal(greenPixels,0,'The neighbouring green area must stay out of row thumbnails');
    // Missing outer rule: automatic mode must fail without replacing the draft.
    await page.locator('[data-tab=scan]').click();await makeGrid(page,true);
    await page.locator('#recognize').click();
@@ -108,7 +128,7 @@ try{
    const external=requests.filter(request=>!request.url.startsWith(base)&&!request.url.startsWith('blob:http://127.0.0.1:4173/')&&!request.url.startsWith('data:image/'));
    assert.deepEqual(external,[]);assert.equal(requests.some(request=>request.method!=='GET'||request.post),false,'No image upload or remote inference');assert.deepEqual(errors,[]);
    await page.screenshot({path:`test-report/${name}-grid30-review.png`,fullPage:true});
-   reports.push({browser:name,engine:'ppocr-v5-ch',digitsOnly:true,raw,gridSlots:30,blankSlot:12,explicitMissingOuterEdge:true,edgeWarning:true,activeExport:true,draftReload:true,warmWeights:true,cancelPreservesDraft:true,noUpload:true,errors});
+   reports.push({browser:name,engine:'ppocr-v5-ch',digitsOnly:true,raw,gridSlots:30,blankSlot:12,wideCrop:true,slantedGutter:true,colouredMarginExcluded:true,explicitMissingOuterEdge:true,edgeWarning:true,activeExport:true,draftReload:true,warmWeights:true,cancelPreservesDraft:true,noUpload:true,errors});
   }catch(error){console.error('SINGLE_MODEL_FAILURE',name,String(error),errors);await page.screenshot({path:`test-report/${name}-single-failed.png`,fullPage:true}).catch(()=>{});throw error;}
   finally{await context.close();await browser.close();}
  }
