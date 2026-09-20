@@ -27,6 +27,7 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/oc-browser" --ignore-scripts --no-audit --no-fund playwright@1.63.0
           node "$RUNNER_TEMP/oc-browser/node_modules/playwright/cli.js" install --with-deps chromium webkit > "$RUNNER_TEMP/browser-install.log" 2>&1 || { tail -60 "$RUNNER_TEMP/browser-install.log"; exit 1; }
           echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/oc-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - run: node tools/update-check.mjs
       - run: node tools/cache-probe.mjs
       - run: node tools/browser-check.mjs
       - run: node tools/multi-browser-check.mjs

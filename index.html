@@ -2,6 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
+<meta name="oc-build" content="fcbf4246888a">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#152523">
 <meta name="mobile-web-app-capable" content="yes">
@@ -15,13 +16,14 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="icon" href="assets/icon-192.png" type="image/png">
-<link rel="stylesheet" href="app.css?build=ca6156e4fbfb">
+<link rel="stylesheet" href="app.css?build=fcbf4246888a">
 <title>Oc · 時間掃描</title>
 </head>
 <body>
 <header class="brand"><img src="assets/icon-192.png" width="46" height="46" alt="戴粉紅蝴蝶結的羽球貓咪"><div><span class="eyebrow">PHOTO TO TIME</span><h1>Oc <span>時間掃描</span></h1></div><span class="local-badge">本機處理</span></header>
 <nav class="tabs" aria-label="主要功能"><button type="button" data-tab="scan" aria-current="page">① 掃描</button><button type="button" data-tab="review">② 校正</button><button type="button" data-tab="settings">③ 設定</button></nav>
 <main>
+<div id="update-banner" class="card" hidden><p id="update-message" role="status"></p><button id="apply-update-banner" type="button" class="primary">更新並保留資料</button></div>
 <div id="notice" role="status" aria-live="polite">照片不上傳。辨識結果須人工核對；潦草、連筆與表格線可能誤判。</div>
 <section id="scan" class="page">
 <div class="intro"><span class="eyebrow">只取需要的那一欄</span><h2>把紙上的時間，<br>變成可以貼上的文字。</h2><p>拍正紙張，再用手指框住由上往下的 4 位數時間。</p></div>
@@ -50,6 +52,7 @@
 </section>
 <section id="settings" class="page" hidden>
 <span class="eyebrow">清楚知道資料在哪裡</span><h2>設定</h2>
+<div class="card"><h3>程式更新</h3><p id="update-status" role="status" aria-live="polite">正在檢查更新…</p><div class="actions"><button id="check-update" type="button">檢查更新</button><button id="apply-update" type="button" class="primary" hidden>更新並保留資料</button></div><p class="small">從主畫面開啟或回到 Oc 時會檢查新版。尚未操作時可自動更新；有操作中的照片或校正時先提示。更新保留草稿、教材與已安裝模型，目前照片需重新選取。</p><p class="small">目前內容：<code id="app-build"></code></p></div>
 <div class="card"><h3>模型安裝與容量</h3>
 <h4>① 下載到手機「檔案」</h4>
 <p class="small">已下載通用模型包或原有完整包，可直接做第 ② 步，不用重新下載；完整包也包含通用模型。</p>
@@ -64,5 +67,5 @@
 </section>
 </main><footer>Oc · 辨識協助，人工確認。</footer>
 <noscript>需要啟用 JavaScript 才能在本機辨識照片。</noscript>
-<script type="module" src="src/app.js?build=ca6156e4fbfb"></script>
+<script type="module" src="src/app.js?build=fcbf4246888a"></script>
 </body></html>
