@@ -1,6 +1,6 @@
-import { segment } from './segmentation.js?build=80814c2a0770';
-import { prepareLine, decodeCTC } from './paddle.js?build=80814c2a0770';
-import { normalizedTranscript, engineById } from './engines.js?build=80814c2a0770';
+import { segment } from './segmentation.js?build=ca6156e4fbfb';
+import { prepareLine, decodeCTC } from './paddle.js?build=ca6156e4fbfb';
+import { normalizedTranscript, engineById } from './engines.js?build=ca6156e4fbfb';
 self.onmessage=async({data})=>{
  const {id,engine,rgba,width,height,options,assets}=data;let session,stage='準備辨識';const localUrls=[];
  const progress=message=>{stage=message;self.postMessage({id,type:'progress',message});};
