@@ -68,7 +68,8 @@ export function normalizeDigit(mask,width,box) {
     for(let y=0;y<28;y++) for(let x=0;x<28;x++) if(x+dx>=0&&x+dx<28&&y+dy>=0&&y+dy<28) centered[(y+dy)*28+x+dx]=result[y*28+x];
     return centered;
 }
-function gridBoundaries(rgba,width,height) {
+function gridBoundaries(rgba,width,height,edgeMode='auto') {
+    if(!['auto','crop-top','crop-bottom','crop-both'].includes(edgeMode))throw new Error('表單外框選項無效。');
     // Search the original pixels: thresholdImage deliberately erases long rules.
     // A three-pixel window tolerates slightly slanted photographed lines.
     const dark=new Uint8Array(width*height);
@@ -86,15 +87,29 @@ function gridBoundaries(rgba,width,height) {
         }
         projection[y]=covered>=width*.72&&longest>=width*.55?1:0;
     }
-    const lines=runs(projection,2).map(([start,end])=>Math.floor((start+end-1)/2));
-    if(lines.length!==31) throw new Error(`找不到完整的 30 格邊界（偵測到 ${lines.length} 條橫線）。請框入第一格上緣到最後一格下緣。`);
-    const gaps=lines.slice(1).map((line,i)=>line-lines[i]).sort((a,b)=>a-b);
-    const middle=gaps[15];
-    if(middle<8||gaps[0]<middle*.55||gaps.at(-1)>middle*1.65) throw new Error('30 格的格線間距不可靠；請拍正紙張並重新框選時間欄。');
-    return {lines,dark};
+    const bands=runs(projection,2),lines=bands.map(([start,end])=>Math.floor((start+end-1)/2));
+    const addTop=edgeMode==='crop-top'||edgeMode==='crop-both',addBottom=edgeMode==='crop-bottom'||edgeMode==='crop-both';
+    const required=31-Number(addTop)-Number(addBottom);
+    if(lines.length!==required){
+        if(edgeMode==='auto')throw new Error('找不到完整的 30 格邊界（偵測到 '+lines.length+' 條橫線）。若只有外框缺線，先將框選上下緣對齊完整 30 格，再到「表單外框」指定上緣或下緣；中間缺線請重新拍攝。');
+        throw new Error('目前偵測到 '+lines.length+' 條橫線，所選外框方式需要 '+required+' 條。請核對缺的是上緣、下緣或兩端；若所有格線完整，改回自動偵測。');
+    }
+    // A wide mask across the photo is not a printed rule. Never use its centre
+    // as a row boundary even when the total count happens to match.
+    const widths=bands.map(([start,end])=>end-start).sort((a,b)=>a-b),normalWidth=widths[Math.floor(widths.length/2)];
+    if(widths.at(-1)>Math.max(8,normalWidth*2))throw new Error('格線位置有大片遮蓋或黑帶，無法可靠分格。請把遮蓋區留在框外，保留完整 30 格。');
+    const gaps=lines.slice(1).map((line,i)=>line-lines[i]).sort((a,b)=>a-b),middle=gaps[Math.floor(gaps.length/2)];
+    if(middle<8||gaps[0]<middle*.55||gaps.at(-1)>middle*1.65)throw new Error('30 格的格線間距不可靠，可能缺少中間格線；請拍正紙張並重新框選時間欄。');
+    // Only the user-selected crop edge may replace a missing outer rule.
+    // Do not extrapolate a hidden internal rule or silently turn 29 cells into 30.
+    for(const gap of [addTop?lines[0]:null,addBottom?height-1-lines.at(-1):null].filter(n=>n!==null)){
+        if(gap<middle*.55||gap>middle*1.65)throw new Error('框選邊緣與第一／最後格線的距離不像一格。請對齊整格外緣；不能切掉半格或加入一整段頁邊。');
+    }
+    if(addTop)lines.unshift(0);if(addBottom)lines.push(height-1);
+    return {lines,dark,addTop,addBottom};
 }
 function segmentGrid30(rgba,width,height,mask,options) {
-    const {lines,dark}=gridBoundaries(rgba,width,height);
+    const {lines,dark,addTop,addBottom}=gridBoundaries(rgba,width,height,options.gridEdges);
     // Exclude page-long vertical borders from the line model's original image.
     const columns=new Uint8Array(width);
     for(let x=0;x<width;x++) {
@@ -114,11 +129,13 @@ function segmentGrid30(rgba,width,height,mask,options) {
     }
     if(right-left<8) throw new Error('時間欄過窄，無法排除格線。');
     return Array.from({length:30},(_,i)=>{
-        const top=lines[i]+3,bottom=lines[i+1]-3;
+        const croppedTop=i===0&&addTop,croppedBottom=i===29&&addBottom;
+        const edgeNote=croppedTop?'此格上緣使用你指定的框選邊界，請確認數字完整。':croppedBottom?'此格下緣使用你指定的框選邊界，請確認數字完整。':'';
+        const top=lines[i]+(croppedTop?0:3),bottom=lines[i+1]-(croppedBottom?0:3);
         if(bottom<=top) throw new Error('30 格的格線間距過小。');
         const box={x:0,y:lines[i],width,height:lines[i+1]-lines[i]};
         const ink=bounds(mask,width,left,top,right,bottom);
-        if(!ink||ink.ink<3) return {box,glyphs:[],uncertain:true,reason:'此格空白，請人工確認。'};
+        if(!ink||ink.ink<3) return {box,glyphs:[],uncertain:true,reason:edgeNote+'此格空白，請人工確認。'};
         const vertical=new Uint8Array(ink.width);
         for(let x=0;x<ink.width;x++) for(let y=ink.y;y<ink.y+ink.height;y++) if(mask[y*width+ink.x+x]) {vertical[x]=1;break;}
         const groups=runs(vertical,0).filter(([s,e])=>bounds(mask,width,ink.x+s,ink.y,ink.x+e,ink.y+ink.height)?.ink>=3);
@@ -127,7 +144,7 @@ function segmentGrid30(rgba,width,height,mask,options) {
         const glyphs=split.map(([start,end])=>normalizeDigit(mask,width,bounds(mask,width,start,top,end,bottom)));
         const pad=Math.max(1,Math.round(ink.height*.1)),x=Math.max(left,ink.x-pad),y=Math.max(top,ink.y-pad);
         const lineBox={x,y,width:Math.min(right,ink.x+ink.width+pad)-x,height:Math.min(bottom,ink.y+ink.height+pad)-y};
-        return {box,lineBox,glyphs,uncertain:!automatic,reason:automatic?'':'格內數字未能明確分成四個，請核對。'};
+        return {box,lineBox,glyphs,uncertain:!!edgeNote||!automatic,reason:edgeNote+(automatic?'':'格內數字未能明確分成四個，請核對。')};
     });
 }
 export function segment(rgba,width,height,options={}) {

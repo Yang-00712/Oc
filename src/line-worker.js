@@ -1,6 +1,6 @@
-import { segment } from './segmentation.js?build=fcbf4246888a';
-import { prepareLine, decodeCTC } from './paddle.js?build=fcbf4246888a';
-import { normalizedTranscript, engineById } from './engines.js?build=fcbf4246888a';
+import { segment } from './segmentation.js?build=d655f868feaf';
+import { prepareLine, decodeCTC } from './paddle.js?build=d655f868feaf';
+import { normalizedTranscript, engineById } from './engines.js?build=d655f868feaf';
 self.onmessage=async({data})=>{
  const {id,engine,rgba,width,height,options,assets}=data;let session,stage='準備辨識';const localUrls=[];
  const progress=message=>{stage=message;self.postMessage({id,type:'progress',message});};
@@ -36,7 +36,7 @@ self.onmessage=async({data})=>{
    try{
     outputs=await session.run({[assets.config.inputName]:tensor});
     const output=outputs[assets.config.outputName],result=decodeCTC(output.data,output.dims,assets.config.characters,{digitsOnly:true});
-    rows.push({box:piece.box,raw:normalizedTranscript(result.raw),transcript:result.unrestrictedRaw,numericOnly:true,predictions:[],score:result.score,uncertain:true,reason:'僅辨識數字 0–9；未補字或修正時間。'+(result.restrictedFrames?'已排除非數字候選，請核對原圖。':''),modelHash:assets.modelHash});
+    rows.push({box:piece.box,raw:normalizedTranscript(result.raw),transcript:result.unrestrictedRaw,numericOnly:true,predictions:[],score:result.score,uncertain:true,reason:(piece.reason||'')+'僅辨識數字 0–9；未補字或修正時間。'+(result.restrictedFrames?'已排除非數字候選，請核對原圖。':''),modelHash:assets.modelHash});
    }finally{tensor.dispose();if(outputs)for(const t of Object.values(outputs))t.dispose();}
    progress(`辨識第 ${i+1} / ${pieces.length} 列`);
   }

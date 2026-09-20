@@ -13,16 +13,16 @@ const base='http://127.0.0.1:4173/Oc/',reports=[];
 const waitRoute=(promise)=>{let timer;return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('等待模型請求逾時')),30000);})]).finally(()=>clearTimeout(timer));};
 const readRows=page=>page.locator('.row-edit input').evaluateAll(items=>items.map(item=>item.value));
 const waitSaved=page=>page.waitForFunction(()=>document.querySelector('#save-status').textContent.includes('已保存'));
-const makeGrid=async page=>{
- const data=await page.evaluate(()=>{
+const makeGrid=async (page,missingTop=false)=>{
+ const data=await page.evaluate(missingTop=>{
   const canvas=document.createElement('canvas');canvas.width=112;canvas.height=790;
   const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,112,790);ctx.fillStyle='#141414';
   const lines=[5];for(let i=0;i<30;i++)lines.push(lines.at(-1)+22+(i%4)*2);
-  for(const y of lines)ctx.fillRect(2,y,108,1);
+  for(const y of (missingTop?lines.slice(1):lines))ctx.fillRect(2,y,108,1);
   ctx.fillRect(2,5,1,lines.at(-1)-4);ctx.fillRect(109,5,1,lines.at(-1)-4);
   for(let row=0;row<30;row++)if(row!==11)for(const x of [21,40,59,78])ctx.fillRect(x,lines[row]+7,2,7);
   return canvas.toDataURL('image/png').split(',')[1];
- });
+ },missingTop);
  await page.locator('#photo').setInputFiles({name:'synthetic-grid.png',mimeType:'image/png',buffer:Buffer.from(data,'base64')});
  await page.waitForSelector('#photo-editor:not([hidden])');
 };
@@ -80,6 +80,19 @@ try{
    const gridDraft=await page.evaluate(async()=>await(await import('./src/store.js')).getState('draft'));
    assert.deepEqual(gridDraft.rows.map(row=>row.formSlot),Array.from({length:30},(_,i)=>i+1));
    assert.equal(gridDraft.rows[11].raw,'','Blank cell must remain empty');
+   // Missing outer rule: automatic mode must fail without replacing the draft.
+   await page.locator('[data-tab=scan]').click();await makeGrid(page,true);
+   await page.locator('#recognize').click();
+   await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('偵測到 30 條'));
+   assert.equal((await page.evaluate(async()=>await(await import('./src/store.js')).getState('draft'))).rows.length,30);
+   await page.locator('#grid-edges').selectOption('crop-top');await page.locator('#recognize').click();
+   await page.waitForSelector('#review:not([hidden])',{timeout:240000});await waitSaved(page);
+   const repaired=await page.evaluate(async()=>await(await import('./src/store.js')).getState('draft'));
+   assert.equal(repaired.rows.length,30);assert.match(repaired.rows[0].reason,/上緣使用你指定/);
+   assert.equal(repaired.rows[0].confirmed,false);assert.equal(repaired.rows[11].raw,'');
+   assert.deepEqual(repaired.rows.map(row=>row.formSlot),Array.from({length:30},(_,i)=>i+1));
+   await page.locator('.row details').first().evaluate(element=>{element.open=true;});
+   assert.match(await page.locator('.row-message').first().innerText(),/上緣使用你指定/);
    const beforeCancel=await readRows(page);
    await page.locator('[data-tab=settings]').click();await page.evaluate(async()=>{const {clearModel}=await import('./src/engine-assets.js');await clearModel('ppocr-v5-ch');});
    await page.locator('[data-tab=scan]').click();await page.locator('#row-mode').selectOption('auto');await page.locator('#demo').click();
@@ -95,7 +108,7 @@ try{
    const external=requests.filter(request=>!request.url.startsWith(base)&&!request.url.startsWith('blob:http://127.0.0.1:4173/')&&!request.url.startsWith('data:image/'));
    assert.deepEqual(external,[]);assert.equal(requests.some(request=>request.method!=='GET'||request.post),false,'No image upload or remote inference');assert.deepEqual(errors,[]);
    await page.screenshot({path:`test-report/${name}-grid30-review.png`,fullPage:true});
-   reports.push({browser:name,engine:'ppocr-v5-ch',digitsOnly:true,raw,gridSlots:30,blankSlot:12,activeExport:true,draftReload:true,warmWeights:true,cancelPreservesDraft:true,noUpload:true,errors});
+   reports.push({browser:name,engine:'ppocr-v5-ch',digitsOnly:true,raw,gridSlots:30,blankSlot:12,explicitMissingOuterEdge:true,edgeWarning:true,activeExport:true,draftReload:true,warmWeights:true,cancelPreservesDraft:true,noUpload:true,errors});
   }catch(error){console.error('SINGLE_MODEL_FAILURE',name,String(error),errors);await page.screenshot({path:`test-report/${name}-single-failed.png`,fullPage:true}).catch(()=>{});throw error;}
   finally{await context.close();await browser.close();}
  }
