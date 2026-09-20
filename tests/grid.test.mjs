@@ -52,3 +52,55 @@ test('inset borders and page margins do not turn a blank cell into digits',()=>{
     assert.ok(cells[12].lineBox.x>20);
     assert.ok(cells[12].lineBox.x+cells[12].lineBox.width<110);
 });
+
+function ruledCrop({omit=[],rows=30,margin=0,blackBand=false}={}){
+    const width=112,height=rows*24+1+margin,{rgba,dot}=paper(width,height);
+    for(let i=0;i<=rows;i++)if(!omit.includes(i))for(let x=2;x<110;x++)dot(x,margin+i*24);
+    for(let y=margin;y<height;y++){dot(2,y);dot(109,y);}
+    for(let row=0;row<rows;row++)if(row!==11)
+        for(const x of [21,40,59,78])for(let y=margin+row*24+8;y<margin+row*24+15;y++){dot(x,y);dot(x+1,y);}
+    if(blackBand)for(let y=0;y<16;y++)for(let x=2;x<110;x++)dot(x,y);
+    return {rgba,width,height};
+}
+function grid(crop,gridEdges='auto'){return segment(crop.rgba,crop.width,crop.height,{rowMode:'grid30',gridEdges});}
+test('missing top outer rule needs an explicit crop-top choice and preserves blank row 12',()=>{
+    const crop=ruledCrop({omit:[0]});
+    assert.throws(()=>grid(crop),/偵測到 30 條/);
+    const cells=grid(crop,'crop-top');
+    assert.equal(cells.length,30);assert.equal(cells[0].box.y,0);
+    assert.equal(cells[0].uncertain,true);assert.match(cells[0].reason,/上緣/);
+    assert.equal(cells[11].glyphs.length,0);assert.equal(cells[12].glyphs.length,4);
+    assert.ok(cells.every((cell,i)=>i===0||cell.box.y>cells[i-1].box.y));
+});
+test('missing bottom outer rule uses only the explicitly selected bottom edge',()=>{
+    const crop=ruledCrop({omit:[30]}),cells=grid(crop,'crop-bottom');
+    assert.equal(cells.length,30);assert.equal(cells[29].box.y+cells[29].box.height,crop.height-1);
+    assert.match(cells[29].reason,/下緣/);assert.equal(cells[29].uncertain,true);
+    assert.throws(()=>grid(crop,'crop-top'),/距離不像一格/);
+});
+test('both missing outer rules retain 30 slots only after an explicit two-edge choice',()=>{
+    const crop=ruledCrop({omit:[0,30]});
+    assert.throws(()=>grid(crop),/偵測到 29 條/);
+    const cells=grid(crop,'crop-both');
+    assert.equal(cells.length,30);assert.match(cells[0].reason,/上緣/);assert.match(cells[29].reason,/下緣/);
+    assert.equal(cells[11].glyphs.length,0);
+});
+test('real 29-cell crop cannot silently become 30 cells',()=>{
+    const crop=ruledCrop({rows:29});
+    assert.throws(()=>grid(crop),/偵測到 30 條/);
+    assert.throws(()=>grid(crop,'crop-top'),/距離不像一格/);
+    assert.throws(()=>grid(crop,'crop-bottom'),/距離不像一格/);
+    assert.throws(()=>grid(ruledCrop({rows:29,margin:24})),/偵測到 30 條/);
+});
+test('missing internal rule is rejected even if an outer edge is selected',()=>{
+    const crop=ruledCrop({omit:[15]});
+    assert.throws(()=>grid(crop,'crop-top'),/可能缺少中間格線/);
+    assert.throws(()=>grid(crop,'crop-bottom'),/可能缺少中間格線/);
+});
+test('full rules cannot be combined with an extra crop edge',()=>{
+    assert.throws(()=>grid(ruledCrop(),'crop-top'),/需要 30 條/);
+    assert.throws(()=>grid(ruledCrop(),'unknown'),/選項無效/);
+});
+test('wide black masking is not accepted as a printed rule',()=>{
+    assert.throws(()=>grid(ruledCrop({blackBand:true})),/黑帶/);
+});

@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="oc-build" content="fcbf4246888a">
+<meta name="oc-build" content="d655f868feaf">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#152523">
 <meta name="mobile-web-app-capable" content="yes">
@@ -16,7 +16,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="icon" href="assets/icon-192.png" type="image/png">
-<link rel="stylesheet" href="app.css?build=fcbf4246888a">
+<link rel="stylesheet" href="app.css?build=d655f868feaf">
 <title>Oc · 時間掃描</title>
 </head>
 <body>
@@ -40,7 +40,7 @@
 </div>
 </div>
 <div class="card"><h3>本機辨識模型</h3><p id="digits-only-note" class="small"><strong>數字限定：0–9</strong>。模型在選字時只保留數字；不足四位、多於四位或時間不合法仍須手動核對，不補字。已匯入的通用模型可繼續使用。</p><div id="engine-options"></div><div class="actions install-actions"><button id="install-selected" type="button">下載並保存通用模型</button><button id="open-model-settings" type="button">從檔案匯入模型 ZIP</button></div><p id="install-scan-status" class="small" role="status"></p><p class="small">通用模型只在按下辨識時執行；下載與辨識分開計時，照片不上傳。</p></div>
-<div class="card"><div class="field"><label for="row-mode">紙張版面</label><select id="row-mode"><option value="auto">自由手寫（自動找列）</option><option value="grid30">表單 30 格（保留每格位置）</option></select></div><div class="two-fields"><label id="row-count-field">列數<input id="row-count" type="number" min="1" max="100" inputmode="numeric" placeholder="留空＝自動"></label><label>數字切割<select id="digit-mode"><option value="auto">自動辨識間距</option><option value="equal">每列等寬切四格</option></select></label></div><p id="row-mode-help" class="small">自由手寫時，列數只用來核對，不會等高硬切；請框近時間欄。</p><div class="actions"><button id="recognize" class="primary wide" type="button" disabled>辨識時間 →</button><button id="cancel" type="button" hidden>取消</button></div><p id="progress" class="small" aria-live="polite">模型只在按下辨識時載入。</p></div>
+<div class="card"><div class="field"><label for="row-mode">紙張版面</label><select id="row-mode"><option value="auto">自由手寫（自動找列）</option><option value="grid30">表單 30 格（保留每格位置）</option></select></div><div id="grid-edges-field" class="field" hidden><label for="grid-edges">表單外框</label><select id="grid-edges"><option value="auto">自動偵測完整格線</option><option value="crop-top">缺上緣：使用框選頂端</option><option value="crop-bottom">缺下緣：使用框選底端</option><option value="crop-both">缺上下緣：使用框選兩端</option></select></div><div class="two-fields"><label id="row-count-field">列數<input id="row-count" type="number" min="1" max="100" inputmode="numeric" placeholder="留空＝自動"></label><label>數字切割<select id="digit-mode"><option value="auto">自動辨識間距</option><option value="equal">每列等寬切四格</option></select></label></div><p id="row-mode-help" class="small">自由手寫時，列數只用來核對，不會等高硬切；請框近時間欄。</p><div class="actions"><button id="recognize" class="primary wide" type="button" disabled>辨識時間 →</button><button id="cancel" type="button" hidden>取消</button></div><p id="progress" class="small" aria-live="polite">模型只在按下辨識時載入。</p></div>
 </section>
 <section id="review" class="page" hidden>
 <div class="section-head"><div><span class="eyebrow">看一眼，再帶走</span><h2>辨識結果</h2></div><button id="add-row" type="button">＋ 一列</button></div>
@@ -67,5 +67,5 @@
 </section>
 </main><footer>Oc · 辨識協助，人工確認。</footer>
 <noscript>需要啟用 JavaScript 才能在本機辨識照片。</noscript>
-<script type="module" src="src/app.js?build=fcbf4246888a"></script>
+<script type="module" src="src/app.js?build=d655f868feaf"></script>
 </body></html>
