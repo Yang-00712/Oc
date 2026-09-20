@@ -121,11 +121,23 @@ function gridBoundaries(rgba,width,height,edgeMode='auto') {
     if(!['auto','crop-top','crop-bottom','crop-both'].includes(edgeMode))throw new Error('表單外框選項無效。');
     // Search the original pixels: thresholdImage deliberately erases long rules.
     // Use neutral/dark printed rules; a flat coloured mask is not a grid line.
-    const dark=new Uint8Array(width*height);
-    for(let i=0;i<dark.length;i++) {
-        const p=i*4;
-        const r=rgba[p],g=rgba[p+1],b=rgba[p+2],high=Math.max(r,g,b),low=Math.min(r,g,b);
-        dark[i]=(.299*r+.587*g+.114*b)<155&&(high-low<=40||high<=70)?1:0;
+    const dark=new Uint8Array(width*height),gray=new Uint8Array(dark.length),neutral=new Uint8Array(dark.length),stride=width+1,sums=new Float64Array(stride*(height+1));
+    for(let y=0;y<height;y++){
+        let total=0;
+        for(let x=0;x<width;x++){
+            const i=y*width+x,p=i*4,r=rgba[p],g=rgba[p+1],b=rgba[p+2],high=Math.max(r,g,b),low=Math.min(r,g,b);
+            gray[i]=Math.round(.299*r+.587*g+.114*b);neutral[i]=high-low<=40||high<=70?1:0;
+            total+=gray[i];const at=(y+1)*stride+x+1;sums[at]=sums[at-stride]+total;
+        }
+    }
+    // A shaded sheet can be darker than 155 without being a printed rule.
+    // Require local contrast; keep genuinely black ink so a broad blackout is
+    // still rejected instead of being reduced to two invented thin edges.
+    const radius=Math.max(9,Math.min(25,Math.round(width/8)));
+    for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+        const x0=Math.max(0,x-radius),x1=Math.min(width,x+radius+1),y0=Math.max(0,y-radius),y1=Math.min(height,y+radius+1);
+        const mean=(sums[y1*stride+x1]-sums[y0*stride+x1]-sums[y1*stride+x0]+sums[y0*stride+x0])/((x1-x0)*(y1-y0)),i=y*width+x;
+        dark[i]=neutral[i]&&(gray[i]<70||gray[i]<Math.min(155,mean-14))?1:0;
     }
     const column=gridColumn(dark,width,height),projection=new Uint8Array(height);
     for(let y=0;y<height;y++) {

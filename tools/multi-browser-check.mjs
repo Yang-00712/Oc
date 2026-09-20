@@ -17,7 +17,7 @@ const makeGrid=async (page,missingTop=false,wide=false)=>{
  const data=await page.evaluate(({missingTop,wide})=>{
   const canvas=document.createElement('canvas');canvas.width=wide?280:112;canvas.height=790;
   const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,790);
-  if(wide){ctx.fillStyle='rgb(90,190,90)';ctx.fillRect(176,0,104,790);}
+  if(wide){const shade=ctx.createLinearGradient(0,0,0,790);shade.addColorStop(0,'white');shade.addColorStop(1,'rgb(140,140,140)');ctx.fillStyle=shade;ctx.fillRect(0,0,176,790);ctx.fillStyle='rgb(90,190,90)';ctx.fillRect(176,0,104,790);}
   ctx.fillStyle='#141414';
   const lines=[5];for(let i=0;i<30;i++)lines.push(lines.at(-1)+22+(i%4)*2);
   for(const y of (missingTop?lines.slice(1):lines))ctx.fillRect(wide?80:2,y,wide?96:108,1);
@@ -128,7 +128,7 @@ try{
    const external=requests.filter(request=>!request.url.startsWith(base)&&!request.url.startsWith('blob:http://127.0.0.1:4173/')&&!request.url.startsWith('data:image/'));
    assert.deepEqual(external,[]);assert.equal(requests.some(request=>request.method!=='GET'||request.post),false,'No image upload or remote inference');assert.deepEqual(errors,[]);
    await page.screenshot({path:`test-report/${name}-grid30-review.png`,fullPage:true});
-   reports.push({browser:name,engine:'ppocr-v5-ch',digitsOnly:true,raw,gridSlots:30,blankSlot:12,wideCrop:true,slantedGutter:true,colouredMarginExcluded:true,explicitMissingOuterEdge:true,edgeWarning:true,activeExport:true,draftReload:true,warmWeights:true,cancelPreservesDraft:true,noUpload:true,errors});
+   reports.push({browser:name,engine:'ppocr-v5-ch',digitsOnly:true,raw,gridSlots:30,blankSlot:12,wideCrop:true,shadedPaper:true,slantedGutter:true,colouredMarginExcluded:true,explicitMissingOuterEdge:true,edgeWarning:true,activeExport:true,draftReload:true,warmWeights:true,cancelPreservesDraft:true,noUpload:true,errors});
   }catch(error){console.error('SINGLE_MODEL_FAILURE',name,String(error),errors);await page.screenshot({path:`test-report/${name}-single-failed.png`,fullPage:true}).catch(()=>{});throw error;}
   finally{await context.close();await browser.close();}
  }
