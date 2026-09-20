@@ -9,6 +9,7 @@
 | 推論 | `src/ocr-worker.js`, `src/cnn.js`, `models/model.json` | 權重hash、`infer`、Worker生命週期 |
 | 本機保存 | `src/store.js`, `src/zip.js` | IndexedDB、`saveSample`、ZIP、不碰StrForge |
 | 訓練與模型來源 | `tools/train-model.py`, `models/training-metrics.json` | MNIST、模型參數、單字測試限制 |
+| 手寫壓力測試 | `tests/handwriting-fixtures.mjs`, `tests/handwriting.html`, `tools/handwriting-benchmark.mjs`, `tests/recognition-box.test.mjs` | 30 格合成筆跡 / recognitionBox / 固定答案 / 不代表個人筆跡準確率 |
 | 驗證 | `tests/core.test.mjs`, `tools/browser-check.mjs` | unit、parity、跨引擎UI與失敗路徑 |
 | 發布 | `README.md`, `.github/workflows/check.yml`, `tools/stamp.mjs` | main/(root)、內容識別碼、PR驗證 |
 | 設計與素材 | `docs/OCR.md`, `docs/CREDITS.md` | 原StrForge經驗、已做／未做、來源 |
