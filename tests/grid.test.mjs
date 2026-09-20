@@ -150,3 +150,33 @@ test('a solid dark mask cannot masquerade as a thin outer rule',()=>{
     const crop=widePaper({gutter:true,green:[30,50,30]});
     assert.throws(()=>grid(crop),/無法定位|找不到完整/);
 });
+
+function shadePaper(crop,{start=0,end=140}={}){
+    for(let y=0;y<crop.height;y++){
+        const t=Math.max(0,Math.min(1,(y/crop.height-start)/(1-start))),gray=Math.round(255-(255-end)*t);
+        for(let x=0;x<176;x++){
+            const p=(y*crop.width+x)*4;
+            if(crop.rgba[p]===255&&crop.rgba[p+1]===255&&crop.rgba[p+2]===255)crop.rgba[p]=crop.rgba[p+1]=crop.rgba[p+2]=gray;
+        }
+    }
+    return crop;
+}
+test('gray paper gradient keeps 30 cells, blank row and excludes green masking',()=>{
+    const crop=shadePaper(widePaper()),cells=grid(crop);
+    assert.equal(cells.length,30);assert.equal(cells[11].glyphs.length,0);assert.equal(cells[12].glyphs.length,4);
+    assert.ok(cells.every(cell=>cell.box.x>=95&&cell.box.x+cell.box.width<175));
+});
+test('steeper bottom shadow retains explicit missing top rule handling',()=>{
+    const crop=shadePaper(widePaper({omit:[0],margins:0}),{start:.6});
+    assert.throws(()=>grid(crop),/偵測到 30 條/);
+    const cells=grid(crop,'crop-top');
+    assert.equal(cells.length,30);assert.equal(cells[0].uncertain,true);assert.equal(cells[11].glyphs.length,0);
+    assert.ok(cells.at(-1).box.y+cells.at(-1).box.height<=crop.height);
+});
+test('true black band is rejected even on gray-gradient paper',()=>{
+    const crop=shadePaper(widePaper({margins:5}));
+    for(let y=0;y<16;y++)for(let x=95;x<=175;x++){
+        const p=(y*crop.width+x)*4;crop.rgba[p]=crop.rgba[p+1]=crop.rgba[p+2]=20;
+    }
+    assert.throws(()=>grid(crop),/黑帶/);
+});
