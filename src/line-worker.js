@@ -1,6 +1,6 @@
-import { segment } from './segmentation.js?build=cfe03be0eec5';
-import { prepareLine, decodeCTC } from './paddle.js?build=cfe03be0eec5';
-import { normalizedTranscript, engineById } from './engines.js?build=cfe03be0eec5';
+import { segment } from './segmentation.js?build=aea212fe8d9d';
+import { prepareLine, decodeCTC, recognitionBox } from './paddle.js?build=aea212fe8d9d';
+import { normalizedTranscript, engineById } from './engines.js?build=aea212fe8d9d';
 self.onmessage=async({data})=>{
  const {id,engine,rgba,width,height,options,assets}=data;let session,stage='準備辨識';const localUrls=[];
  const progress=message=>{stage=message;self.postMessage({id,type:'progress',message});};
@@ -31,7 +31,7 @@ self.onmessage=async({data})=>{
   for(let i=0;i<pieces.length;i++){
    const piece=pieces[i];
    if(!piece.glyphs.length){rows.push({box:piece.box,raw:'',transcript:'',predictions:[],uncertain:true,reason:piece.reason,modelHash:assets.modelHash});continue;}
-   const input=prepareLine(rgba,width,height,piece.lineBox||piece.box,assets.config);
+   const input=prepareLine(rgba,width,height,recognitionBox(piece,options),assets.config);
    const tensor=new ort.Tensor('float32',input.data,input.dims);let outputs;
    try{
     outputs=await session.run({[assets.config.inputName]:tensor});

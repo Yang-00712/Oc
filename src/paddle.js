@@ -1,3 +1,15 @@
+// Give faint edge strokes room without crossing a grid rule or neighbouring cell.
+// Free-hand row crops keep their existing behavior; this is one pass, not a retry.
+export function recognitionBox(piece,{rowMode}={}){
+ const box=piece.lineBox||piece.box;
+ if(rowMode!=='grid30'||!piece.lineBox)return box;
+ const inner={x:piece.box.x,y:piece.box.y+3,width:piece.box.width,height:piece.box.height-6};
+ const pad=Math.max(3,Math.round(box.height*.22)),left=Math.max(inner.x,box.x-pad),top=Math.max(inner.y,box.y-pad),right=Math.min(inner.x+inner.width,box.x+box.width+pad),bottom=Math.min(inner.y+inner.height,box.y+box.height+pad);
+ // A user-specified missing outside border can legitimately touch the crop edge.
+ // Fall back rather than shrinking or inverting its already valid line crop.
+ if(left>box.x||top>box.y||right<box.x+box.width||bottom<box.y+box.height)return box;
+ return {x:left,y:top,width:right-left,height:bottom-top};
+}
 // PaddleOCR/RapidOCR recognition contract: BGR, CHW, height 48, x/127.5-1,
 // zero padding, then greedy CTC. Digit restriction changes decoding, not weights.
 export function prepareLine(rgba,width,height,box,config){

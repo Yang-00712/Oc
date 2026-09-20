@@ -1,5 +1,5 @@
-import { loadModel, infer } from './cnn.js?build=cfe03be0eec5';
-import { segment } from './segmentation.js?build=cfe03be0eec5';
+import { loadModel, infer } from './cnn.js?build=aea212fe8d9d';
+import { segment } from './segmentation.js?build=aea212fe8d9d';
 self.onmessage=async({data})=>{
     const {id,rgba,width,height,options}=data;
     try {
