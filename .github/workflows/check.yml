@@ -31,6 +31,8 @@ jobs:
       - run: node tools/cache-probe.mjs
       - run: node tools/browser-check.mjs
       - run: node tools/multi-browser-check.mjs
+      - name: Synthetic handwriting benchmark
+        run: node tools/handwriting-benchmark.mjs
       - run: python tools/model-packs.py
       - run: node tools/model-install-check.mjs
       - name: Verify public Pages download links after deployment
